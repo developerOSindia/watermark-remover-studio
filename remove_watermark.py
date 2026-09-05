@@ -1067,9 +1067,6 @@ def remove_watermark_from_video(
             writer.write(frame)
             processed += 1
             if progress_callback:
-                progress_callback(processed, frame_count)
-            elif frame_count and processed % 30 == 0:
-                print(f"Processed {processed}/{frame_count} frames", end="\r")
                 progress_callback(processed, frames_to_process)
             elif frames_to_process and processed % 30 == 0:
                 print(f"Processed {processed}/{frames_to_process} frames", end="\r")
@@ -1084,9 +1081,6 @@ def remove_watermark_from_video(
             try:
                 subprocess.run(
                     [
-                        ffmpeg_bin, "-y", "-i", str(temporary_path), "-i", str(input_path),
-                        "-map", "0:v:0?", "-map", "1:a?", "-c:v", "libx264", "-crf", "18",
-                        "-preset", "medium", "-c:a", "copy", "-shortest", str(output_path),
                         ffmpeg_bin, "-y",
                         "-i", str(temporary_path),
                         "-t", f"{target_duration:.3f}",
@@ -1106,7 +1100,6 @@ def remove_watermark_from_video(
                 subprocess.run(
                     [
                         ffmpeg_bin, "-y", "-i", str(temporary_path),
-                        "-c:v", "libx264", "-crf", "18", "-preset", "medium", str(output_path),
                         "-c:v", "libx264", "-crf", "18", "-preset", "medium",
                         "-t", f"{target_duration:.3f}",
                         str(output_path),

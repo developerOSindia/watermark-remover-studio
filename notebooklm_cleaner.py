@@ -193,7 +193,6 @@ def clean_notebooklm_video(
     input_path: str,
     output_path: str,
     method: str = "gradient_patch",
-    feather: int = 10,
     feather: Optional[int] = None,
     custom_box: Optional[Dict[str, int]] = None,
     progress_callback: Optional[Callable[[int, int], None]] = None,
@@ -278,7 +277,6 @@ def clean_notebooklm_video(
             out.write(frame)
             frame_idx += 1
             if progress_callback and frame_idx % 15 == 0:
-                progress_callback(frame_idx, total_frames)
                 progress_callback(frame_idx, frames_to_process)
 
         cap.release()
@@ -307,7 +305,7 @@ def clean_notebooklm_video(
                 ffmpeg_bin, "-y", "-i", temp_video,
                 "-c:v", "libx264", "-pix_fmt", "yuv420p",
                 "-t", f"{target_duration:.3f}",
-                output_path,
+                output_path
             ]
             subprocess.run(cmd_fallback, check=True)
 
@@ -372,8 +370,6 @@ def main():
         if ext in video_exts:
             out_path = Path(args.output) if args.output else in_path.with_name(f"{in_path.stem}_cleaned{in_path.suffix}")
             out_path.parent.mkdir(parents=True, exist_ok=True)
-            print(f"Cleaning NotebookLM video: {in_path} -> {out_path}...")
-            clean_notebooklm_video(str(in_path), str(out_path), method=args.method, feather=args.feather)
             trim_msg = f" (trimming last {args.trim_end}s outro card)" if args.trim_end > 0 else ""
             print(f"Cleaning NotebookLM video: {in_path} -> {out_path}{trim_msg}...")
             clean_notebooklm_video(
@@ -407,7 +403,6 @@ def main():
                 count += 1
                 print(f"  Cleaned slide: {f.name}")
             elif f.suffix.lower() in video_exts:
-                clean_notebooklm_video(str(f), str(out_dir / f.name), method=args.method, feather=args.feather)
                 clean_notebooklm_video(
                     str(f),
                     str(out_dir / f.name),

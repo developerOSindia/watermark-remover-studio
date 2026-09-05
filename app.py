@@ -1462,15 +1462,8 @@ def render_notebooklm_workspace(nlm_engine_choice: Optional[str] = None, *args, 
             # Clean a single slide image:
             python3 notebooklm_cleaner.py slide.png cleaned_slide.png
 
-            # Clean a NotebookLM presentation or overview video with lossless audio:
-            python3 notebooklm_cleaner.py video.mp4 video_cleaned.mp4
-
-            # Batch clean an entire presentation folder:
             # Batch clean an entire presentation folder of slides or videos:
             python3 notebooklm_cleaner.py ./my_presentation_slides/ ./cleaned_presentation/
-
-            # Adjust feather smoothing radius:
-            python3 notebooklm_cleaner.py slide.png cleaned.png --feather 16 --method gradient_patch
             ```
             """
         )
