@@ -1032,8 +1032,6 @@ def remove_watermark_from_video(
             "-map", "0:v:0",
             "-map", "1:a:0?",
             "-c:v", "libx264",
-            "-crf", "17",
-            "-preset", "medium",
             "-crf", str(crf),
             "-preset", preset_speed,
             "-pix_fmt", "yuv420p",
@@ -1192,8 +1190,6 @@ def remove_watermark_from_video(
                         "-t", f"{target_duration:.3f}",
                         "-i", str(input_path),
                         "-map", "0:v:0?", "-map", "1:a?",
-                        "-c:v", "libx264", "-crf", "18",
-                        "-preset", "medium", "-c:a", "copy",
                         "-c:v", "libx264", "-crf", str(crf),
                         "-preset", preset_speed,
                         "-pix_fmt", "yuv420p",
@@ -1212,7 +1208,6 @@ def remove_watermark_from_video(
                 subprocess.run(
                     [
                         ffmpeg_bin, "-y", "-i", str(temporary_path),
-                        "-c:v", "libx264", "-crf", "18", "-preset", "medium",
                         "-c:v", "libx264", "-crf", str(crf), "-preset", preset_speed,
                         "-pix_fmt", "yuv420p",
                         "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv",

@@ -202,7 +202,6 @@ def clean_notebooklm_video(
 ) -> str:
     """
     Remove the NotebookLM / Gemini Notebook watermark from a video file with
-    lossless audio preservation using FFmpeg stream copy (-c:a copy).
     ultra-high fidelity (CRF 12 + Slow preset) and bit-for-bit lossless audio
     stream copying (-c:a copy). Zero intermediate file compression.
     Optionally trims trailing outro cards (default: last 3.0 seconds).
@@ -252,7 +251,6 @@ def clean_notebooklm_video(
 
     ffmpeg_bin = shutil.which("ffmpeg") or ("/opt/homebrew/bin/ffmpeg" if os.path.exists("/opt/homebrew/bin/ffmpeg") else None)
 
-    # Strategy 1: High-Fidelity Direct FFmpeg Pipe (Zero intermediate compression, visually lossless CRF 17)
     # Strategy 1: Ultra-High-Fidelity Direct FFmpeg Pipe (Zero intermediate compression, CRF 12 Master Quality)
     if ffmpeg_bin:
         cmd = [
@@ -268,8 +266,6 @@ def clean_notebooklm_video(
             "-map", "0:v:0",
             "-map", "1:a:0?",
             "-c:v", "libx264",
-            "-crf", "17",
-            "-preset", "medium",
             "-crf", str(crf),
             "-preset", preset_speed,
             "-pix_fmt", "yuv420p",
@@ -384,8 +380,6 @@ def clean_notebooklm_video(
             "-map", "0:v:0",
             "-map", "1:a:0?",
             "-c:v", "libx264",
-            "-crf", "17",
-            "-preset", "medium",
             "-crf", str(crf),
             "-preset", preset_speed,
             "-pix_fmt", "yuv420p",
@@ -402,7 +396,6 @@ def clean_notebooklm_video(
         if res.returncode != 0:
             cmd_fallback = [
                 ffmpeg_bin, "-y", "-i", temp_video,
-                "-c:v", "libx264", "-crf", "17", "-preset", "medium", "-pix_fmt", "yuv420p",
                 "-c:v", "libx264", "-crf", str(crf), "-preset", preset_speed, "-pix_fmt", "yuv420p",
                 "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv",
                 "-movflags", "+faststart",
@@ -478,7 +471,6 @@ def main():
             out_path = Path(args.output) if args.output else in_path.with_name(f"{in_path.stem}_cleaned{in_path.suffix}")
             out_path.parent.mkdir(parents=True, exist_ok=True)
             trim_msg = f" (trimming last {args.trim_end}s outro card)" if args.trim_end > 0 else ""
-            print(f"Cleaning NotebookLM video: {in_path} -> {out_path}{trim_msg}...")
             print(f"Cleaning NotebookLM video: {in_path} -> {out_path}{trim_msg} [CRF {effective_crf}, preset={args.preset_speed}]...")
             clean_notebooklm_video(
                 str(in_path),
@@ -489,7 +481,6 @@ def main():
                 crf=effective_crf,
                 preset_speed=args.preset_speed,
             )
-            print(f"✓ Successfully cleaned NotebookLM video with lossless audio: {out_path}")
             print(f"✓ Successfully cleaned NotebookLM video with ultra-master quality & lossless audio: {out_path}")
         elif ext in image_exts:
             out_path = Path(args.output) if args.output else in_path.with_name(f"{in_path.stem}_cleaned{in_path.suffix}")
