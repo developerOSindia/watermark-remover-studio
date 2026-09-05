@@ -1,8 +1,8 @@
-# Semantic Design System · DeveloperOS Watermark Studio
+# Semantic Design System · Watermark Studio
 
 ## 1. System Identity & Mission
 
-**DeveloperOS Watermark Studio** is a high-craft, local-first media laboratory designed for forensic watermark eradication, DeepMind SynthID frequency disruption, and C2PA Content Credentials provenance stripping from Google Gemini images and Google Veo videos.
+**Watermark Studio** is a high-craft, local-first media laboratory designed for forensic watermark eradication, DeepMind SynthID frequency disruption, C2PA Content Credentials provenance stripping, and NotebookLM presentation slide logo cleaning from Google Gemini images, Google Veo videos, and multi-page PDF presentation decks.
 
 The interface rejects default SaaS component libraries and template layouts in favor of an **Industrial Darkroom Workbench** aesthetic — purposeful, air-gapped, high-contrast, and dense with technical feedback.
 
@@ -37,6 +37,7 @@ The interface rejects default SaaS component libraries and template layouts in f
 | `--amber-dim` | Amber Warning Wash | — | `rgba(232, 163, 61, 0.12)` | AI prompt detection and notice badges |
 | `--emerald` | Sanitized Green | `#22C55E` | `rgb(34, 197, 94)` | Clean container confirmations (0 findings) |
 | `--crimson` | Critical Alert Red | `#FF4D4D` | `rgb(255, 77, 77)` | C2PA Content Credentials detected badge |
+| `--purple` | NotebookLM Indigo | `#9333EA` | `rgb(147, 51, 234)` | NotebookLM workspace mode badges |
 | `--text-display` | Pure Optical White | `#FFFFFF` | `rgb(255, 255, 255)` | Headlines, display titles, and prominent numbers |
 | `--text-main` | High-Contrast Platinum | `#E4E1E7` | `rgb(228, 225, 231)` | Core interface body text |
 | `--text-muted` | Technical Gray | `#9B9BAA` | `rgb(155, 155, 170)` | Secondary labels, descriptions, and metadata |
@@ -85,10 +86,12 @@ Telemetry / Code     ──> JetBrains Mono (Weights: 500, 700 | Monospace preci
 ## 7. Component Architecture & Patterns
 
 ### 7.1 Sidebar Control Rail
-* **Brand Header:** Uppercase `GEMINI REMOVER` headline alongside an active `AIR-GAPPED` pulse pill.
-* **Engine Settings:** Method selector (Inpaint, Reconstruct, Inverse Alpha), Gain slider (amber thumb), and Bounding Box Scale.
-* **Catalog Preset Selector:** Multi-scale options (`Auto Detect`, `Veo Inset`, `Veo Standard`, `Veo Compact`, `Corner`, `Veo Text`).
-* **SynthID & Provenance Selector:** Direct tier selection (`Off`, `Safe`, `Paranoid`, `Nuclear`) with inline descriptive tooltips.
+* **Brand Header:** Uppercase `WATERMARK STUDIO` headline alongside an active `AIR-GAPPED` pulse pill.
+* **Workspace Selector:** Global switcher routing the central canvas between:
+  1. `✦ Gemini & Veo (Images & Video)`: Eradicate canonical 4-pointed stars, Veo text marks, disrupt SynthID, and strip C2PA manifests.
+  2. `📑 NotebookLM Studio (PDFs, Slides & Video)`: Clean multi-page presentation decks, slide images, and video recordings with mathematical gradient patches and lossless audio preservation.
+* **Gemini/Veo Controls:** Method selector (Inpaint, Reconstruct, Inverse Alpha), Gain slider (amber thumb), Bounding Box Scale, and SynthID / Provenance Tier selector (`Off`, `Safe`, `Paranoid`, `Nuclear`).
+* **NotebookLM Controls:** Engine switcher between `Client-Side PDF Studio (Browser)`, `Python Slide Bench (High-Precision Image Mode)`, and `Video Cleaner Studio (Lossless Audio Passthrough)`.
 
 ### 7.2 Section 01: Source Media Dropzone
 * **Drop Target:** Dashed border container with format chips (`PNG`, `JPG`, `WEBP`, `MP4`, `MOV`, `WEBM`).
@@ -123,6 +126,24 @@ Telemetry / Code     ──> JetBrains Mono (Weights: 500, 700 | Monospace preci
 * **Preset Matrix Table:** High-density monospace specification table outlining asset formats, detection strategies, and audio integrity.
 * **FAQ Accordion:** Expandable questions providing immediate, authoritative answers matching schema.org structured data.
 
+### 7.7 Section 06: NotebookLM Studio Sub-App (PDFs, Slides & Video)
+* **Workspace Isolation:** Clean separation via the sidebar workspace router so users can focus entirely on presentation decks, slide images, and full video recordings.
+* **Client-Side PDF Studio (`notebooklm_embedded.html`):**
+  * **Zero-Upload Guarantee:** Executes entirely in client browser memory using `pdf.js` for rendering and `jspdf` for document compilation.
+  * **Multi-Page Deck Support:** Iterates through every page of uploaded PDF presentations at 2x crisp scale.
+  * **Mathematical Boundary Patching:** Samples background pixels immediately above the logo watermark ($srcY = y - wmH$) with a 12px progressive feathering gradient to guarantee zero blur smudging, preserving sharp slide border rules and presentation cards.
+  * **Darkroom UI Integration:** Live progress bar, visual status telemetry, and one-click PDF download styled in the Darkroom Workbench aesthetic.
+* **Python Slide Bench (High-Precision Image Mode):**
+  * **Targeting Reticle:** Neon cyan HUD box (`draw_notebooklm_reticle`) showing exact calculated watermark coordinates on uploaded slide images.
+  * **Tri-Mode Forensic View:** Side-by-side full slide comparison, 100% corner zoom crop, and difference delta heatmap proving zero alterations outside the logo rectangle.
+  * **Algorithmic Selection:** Toggle between `Gradient Patch` (fast, crisp gradient preservation) and `OpenCV Telea Inpaint` (handles textured cards and photos).
+  * **Dynamic Polarity Detection:** Automatically classifies background as light vs. dark to optimize patch contrast and boundary matching.
+* **Video Cleaner Studio (Lossless Audio Passthrough):**
+  * **High-Speed Frame Processing:** Sequential frame cleaning using optimized NumPy vertical gradient cloning with 10px boundary feathering.
+  * **Bit-Identical Audio Preservation:** Demuxes original audio stream and remuxes with `-c:a copy` via FFmpeg, guaranteeing 100% lossless audio preservation with zero drift or re-encoding artifacts.
+  * **Aspect Ratio Awareness:** Supports both 16:9 landscape slides and 9:16 portrait mobile/vertical videos (such as NotebookLM video walkthroughs).
+  * **Integrated Sample Loader:** Instant 1-click loading of demo video (`How_to_Scale_PSI_for_Data_Drift.mp4`) with live frame 0 reticle preview.
+
 ---
 
 ## 8. Interaction State Machine
@@ -137,6 +158,34 @@ stateDiagram-v2
     Processing --> Verified: Mathematical Inpaint & Frequency Scramble
     Verified --> Download: User Exports Sanitized File
     Download --> Idle: User Clears / Replaces File
+    [*] --> WorkspaceSelection: Launch Studio
+    
+    state "Gemini & Veo Workspace" as GeminiWorkspace {
+        [*] --> IdleGemini: Media Drop
+        IdleGemini --> Inspecting: Instant Container Audit
+        Inspecting --> ReadyGemini: Reticle Projected & Provenance Badged
+        ReadyGemini --> ProcessingGemini: Run Pipeline
+        ProcessingGemini --> VerifiedGemini: Inpainting & SynthID Scramble
+        VerifiedGemini --> DownloadGemini: Lossless Audio / Bit-Identical Export
+    }
+
+    state "NotebookLM Studio Workspace" as NLMWorkspace {
+        [*] --> EngineSelect: Choose PDF Studio, Python Bench, or Video Studio
+        EngineSelect --> BrowserPDF: In-Browser pdf.js Pipeline
+        BrowserPDF --> PatchDecks: Multi-Page 2x Render + Gradient Patching
+        PatchDecks --> DownloadPDF: Export Assembled Clean PDF
+        
+        EngineSelect --> PythonBench: Python Slide Bench
+        PythonBench --> DetectCorner: Reticle Calibration & Polarity Check
+        DetectCorner --> CleanSlide: Patch / Telea Inpainting
+        CleanSlide --> DownloadSlide: Export Cleaned PNG
+
+        EngineSelect --> VideoStudio: Video Cleaner Bench
+        VideoStudio --> InspectVideo: Frame 0 Reticle HUD & Audio Demux
+        InspectVideo --> CleanFrames: Sequential Gradient Patching
+        CleanFrames --> RemuxAudio: Lossless Audio Remux (-c:a copy)
+        RemuxAudio --> DownloadVideo: Export Sanitized MP4
+    }
 ```
 
 1. **Upload & Parse:** Media is read into isolated temporary memory.
@@ -161,4 +210,11 @@ stateDiagram-v2
 * ❌ **No External Tracking:** Zero Google Analytics, Facebook Pixel, or third-party telemetry scripts.
 * ❌ **No Ads or Promotion Banners:** The workspace is strictly a professional utility without banners, affiliate widgets, or donation modals.
 * ❌ **No Cloud Relay:** Processing executes 100% locally on the host machine. Uploaded files exist only in memory or ephemeral session storage and are deleted immediately upon disconnect.
+
+---
+
+## 11. Credits
+
+Engineered with craft by [DeveloperOS](https://github.com/developerOSindia).
+
 

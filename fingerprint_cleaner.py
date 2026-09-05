@@ -1,4 +1,4 @@
-"""DeveloperOS Cleanroom — Image Fingerprint, Provenance, and SynthID Disruption Engine.
+"""Cleanroom — Image Fingerprint, Provenance, and SynthID Disruption Engine.
 
 Ported and adapted from reference libraries (gemini-watermark-and-synthid-remover & image-fingerprint-remover).
 Provides container-level chunk/marker inspection and three-tier sanitization:

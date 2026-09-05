@@ -19,6 +19,16 @@ from fingerprint_cleaner import (
     inspect_image_fingerprints,
     clean_image_fingerprints,
 )
+import streamlit.components.v1 as components
+from notebooklm_cleaner import (
+    remove_notebooklm_watermark,
+    clean_notebooklm_video,
+    get_notebooklm_box,
+    draw_notebooklm_reticle,
+    is_light_background,
+    DEFAULT_LANDSCAPE_CONFIG,
+    DEFAULT_PORTRAIT_CONFIG,
+)
 
 
 APP_DIR = Path(__file__).parent
@@ -719,10 +729,12 @@ def draw_watermark_reticle(image: Image.Image, box: dict[str, int]) -> Image.Ima
 
 def make_zoom_crop(image: Image.Image, box: dict[str, int], pad: int = 48) -> Image.Image:
     """Crop directly into the watermark patch with padding for sub-pixel inspection."""
+    w_box = box.get("size", box.get("width", 48))
+    h_box = box.get("size", box.get("height", 48))
     x0 = max(0, box["x"] - pad)
     y0 = max(0, box["y"] - pad)
-    x1 = min(image.width, box["x"] + box["size"] + pad)
-    y1 = min(image.height, box["y"] + box["size"] + pad)
+    x1 = min(image.width, box["x"] + w_box + pad)
+    y1 = min(image.height, box["y"] + h_box + pad)
     return image.crop((x0, y0, x1, y1))
 
 
@@ -801,8 +813,8 @@ def inject_seo_tags():
             setMeta('og:title', 'property', 'Gemini & Veo Watermark Remover · SynthID Disrupter & C2PA Cleaner');
             setMeta('og:description', 'property', 'Remove Google Gemini & Veo sparkle watermarks, disrupt Google SynthID latent watermarks, and strip C2PA Content Credentials from images and videos with preserved audio.');
             setMeta('og:type', 'property', 'website');
-            setMeta('og:url', 'property', 'https://watermark-remover-gemini.streamlit.app/');
-            setMeta('og:site_name', 'property', 'DeveloperOS Watermark Studio');
+            setMeta('og:url', 'property', 'https://watermark-remover-studio.streamlit.app/');
+            setMeta('og:site_name', 'property', 'Watermark Studio');
 
             setMeta('twitter:card', 'name', 'summary_large_image');
             setMeta('twitter:title', 'name', 'Gemini & Veo Watermark Remover · SynthID Disrupter & C2PA Cleaner');
@@ -814,9 +826,9 @@ def inject_seo_tags():
                 canonical.setAttribute('rel', 'canonical');
                 head.appendChild(canonical);
             }
-            canonical.setAttribute('href', 'https://watermark-remover-gemini.streamlit.app/');
+            canonical.setAttribute('href', 'https://watermark-remover-studio.streamlit.app/');
 
-            const schemaId = 'developeros-schema-ldjson';
+            const schemaId = 'watermark-studio-schema-ldjson';
             if (!doc.getElementById(schemaId)) {
                 const script = doc.createElement('script');
                 script.id = schemaId;
@@ -826,9 +838,9 @@ def inject_seo_tags():
                     "@graph": [
                         {
                             "@type": "WebApplication",
-                            "@id": "https://watermark-remover-gemini.streamlit.app/#webapp",
-                            "name": "DeveloperOS Watermark Studio · Gemini, Veo & SynthID Cleaner",
-                            "url": "https://watermark-remover-gemini.streamlit.app/",
+                            "@id": "https://watermark-remover-studio.streamlit.app/#webapp",
+                            "name": "Watermark Studio · Gemini, Veo & SynthID Cleaner",
+                            "url": "https://watermark-remover-studio.streamlit.app/",
                             "description": "Free, air-gapped AI watermark remover and DeepMind SynthID disruptor for Google Gemini images, Google Veo videos, and C2PA Content Credentials stripping with lossless audio preservation.",
                             "applicationCategory": "MultimediaApplication",
                             "applicationSubCategory": "Image and Video Editor",
@@ -857,9 +869,9 @@ def inject_seo_tags():
                         },
                         {
                             "@type": "HowTo",
-                            "@id": "https://watermark-remover-gemini.streamlit.app/#howto",
+                            "@id": "https://watermark-remover-studio.streamlit.app/#howto",
                             "name": "How to Remove Watermarks and Disrupt SynthID from AI Media",
-                            "description": "Step-by-step instructions to cleanly remove Google Gemini sparkle watermarks, disrupt SynthID latent frequencies, and sanitize C2PA Content Credentials using DeveloperOS Watermark Studio.",
+                            "description": "Step-by-step instructions to cleanly remove Google Gemini sparkle watermarks, disrupt SynthID latent frequencies, and sanitize C2PA Content Credentials using Watermark Studio.",
                             "step": [
                                 {
                                     "@type": "HowToStep",
@@ -896,7 +908,7 @@ def inject_seo_tags():
                                     "name": "How do I remove the watermark from Google Gemini images?",
                                     "acceptedAnswer": {
                                         "@type": "Answer",
-                                        "text": "Upload your Gemini-generated image (PNG, JPG, WEBP) to DeveloperOS Watermark Studio. The engine automatically detects the sparkle logo coordinates from discrete resolution catalogs and reconstructs the pixels with zero blurring using bi-harmonic inpainting."
+                                        "text": "Upload your Gemini-generated image (PNG, JPG, WEBP) to Watermark Studio. The engine automatically detects the sparkle logo coordinates from discrete resolution catalogs and reconstructs the pixels with zero blurring using bi-harmonic inpainting."
                                     }
                                 },
                                 {
@@ -909,18 +921,18 @@ def inject_seo_tags():
                                 },
                                 {
                                     "@type": "Question",
-                                    "name": "What is Google SynthID and how does DeveloperOS disrupt it?",
+                                    "name": "What is Google SynthID and how is it disrupted?",
                                     "acceptedAnswer": {
                                         "@type": "Answer",
-                                        "text": "Google SynthID embeds imperceptible pseudo-random frequency perturbations into the latent generation process. DeveloperOS's Nuclear mode scrambles sub-LSB spatial frequency phase alignment via asymmetric Lanczos rescaling (0.997), a 2px border uncoupling crop, subtle channel bias, and spatial frequency micro-dithering."
+                                        "text": "Google SynthID embeds imperceptible pseudo-random frequency perturbations into the latent generation process. Nuclear mode scrambles sub-LSB spatial frequency phase alignment via asymmetric Lanczos rescaling (0.997), a 2px border uncoupling crop, subtle channel bias, and spatial frequency micro-dithering."
                                     }
                                 },
                                 {
                                     "@type": "Question",
-                                    "name": "What is C2PA Content Credentials and how does DeveloperOS remove it?",
+                                    "name": "What is C2PA Content Credentials and how is it removed?",
                                     "acceptedAnswer": {
                                         "@type": "Answer",
-                                        "text": "C2PA (Coalition for Content Provenance and Authenticity) embeds provenance metadata manifests into image containers (caBX chunks in PNG and APP11 JUMBF segments in JPEG). DeveloperOS parses containers at the byte level and losslessly strips all provenance, AI prompts, and EXIF tracking while keeping pixels bit-identical."
+                                        "text": "C2PA (Coalition for Content Provenance and Authenticity) embeds provenance metadata manifests into image containers (caBX chunks in PNG and APP11 JUMBF segments in JPEG). The engine parses containers at the byte level and losslessly strips all provenance, AI prompts, and EXIF tracking while keeping pixels bit-identical."
                                     }
                                 },
                                 {
@@ -933,7 +945,7 @@ def inject_seo_tags():
                                 },
                                 {
                                     "@type": "Question",
-                                    "name": "Is DeveloperOS Gemini Watermark Remover free and private?",
+                                    "name": "Is Watermark Studio free and private?",
                                     "acceptedAnswer": {
                                         "@type": "Answer",
                                         "text": "Yes, it is 100% free and open-source under the MIT license. All media processing happens locally in isolated temporary memory within your session. Files are never stored on cloud servers or sent to external AI APIs."
@@ -953,6 +965,517 @@ def inject_seo_tags():
 
 inject_seo_tags()
 
+SEO_KNOWLEDGE_HTML = """<section class="seo-section" aria-label="Technical Guide and FAQ">
+<div class="seo-title">
+<span style="color:var(--primary);">✦</span> 
+<span>HOW IT WORKS · PIXEL RECONSTRUCTION & SYNTHID DISRUPTION</span>
+</div>
+<div class="seo-subtitle">
+Most generic watermark tools rely on heavy neural diffusion inpainting that smears background textures and leaves visible blur circles. 
+<strong>Watermark Studio</strong> utilizes mathematical logo inverse modeling, multi-frame keyframe consensus, bi-harmonic inpainting, 
+and sub-LSB spatial frequency phase scrambling to restore pristine pixel values, disrupt DeepMind SynthID, and strip C2PA manifests without loss of clarity or audio tracks.
+</div>
+
+<div class="seo-grid">
+<div class="seo-card">
+<h3>01 / Multi-Frame Keyframe Consensus</h3>
+<p>Scans keyframes across the first 3 seconds of video to detect the exact sub-pixel coordinates of the Google Veo / Gemini sparkle watermark, overcoming scene transitions and motion blur.</p>
+</div>
+<div class="seo-card">
+<h3>02 / Bi-Harmonic Row Reconstruction</h3>
+<p>Reconstructs masked watermark pixels horizontally using clean boundary pixels, eliminating anti-aliasing ghosting and preserving high-frequency textures behind the logo.</p>
+</div>
+<div class="seo-card">
+<h3>03 / Lossless Audio Passthrough</h3>
+<p>Muxes the original AAC/MP3 audio stream directly into the clean video container using FFmpeg, ensuring zero audio degradation, volume clipping, or track desync.</p>
+</div>
+<div class="seo-card">
+<h3>04 / 100% Private & Air-Gapped</h3>
+<p>Processing executes strictly in temporary memory within your browser session. Files are never stored on external databases or sent to third-party AI APIs.</p>
+</div>
+<div class="seo-card">
+<h3>05 / Google SynthID Disruption</h3>
+<p>DeepMind SynthID embeds imperceptible pseudo-random frequency perturbations. Nuclear mode applies 0.997 Lanczos rescaling, 2px border uncoupling, and micro-dither to scramble sub-LSB phase synchronization.</p>
+</div>
+<div class="seo-card">
+<h3>06 / C2PA & Provenance Stripping</h3>
+<p>Performs byte-level container chunk walking (PNG caBX chunks, JPEG APP11 JUMBF segments) to purge Content Credentials, AI generation prompts, and EXIF/GPS tracking while leaving pixels bit-identical in Safe mode.</p>
+</div>
+</div>
+
+<div class="seo-title" style="margin-top:2.2rem;">
+<span style="color:var(--cyan);">✦</span> 
+<span>TECHNICAL SPECIFICATIONS & PRESETS MATRIX</span>
+</div>
+<div class="seo-subtitle">
+Engineered for high-throughput video pipelines, creator workflows, and forensic image sanitization.
+</div>
+
+<div style="overflow-x:auto; margin-bottom: 2rem;">
+<table style="width:100%; border-collapse: collapse; font-family:'JetBrains Mono', monospace; font-size:0.8rem; text-align:left; background:#14141A; border:1px solid #282836; border-radius:8px;">
+<thead>
+<tr style="background:#1B1B24; border-bottom:1px solid #282836; color:var(--text-main);">
+<th style="padding:0.75rem 1rem;">PIPELINE ASSET</th>
+<th style="padding:0.75rem 1rem;">SUPPORTED FORMATS</th>
+<th style="padding:0.75rem 1rem;">DETECTION & CLEANING STRATEGY</th>
+<th style="padding:0.75rem 1rem;">PIXEL & AUDIO INTEGRITY</th>
+<th style="padding:0.75rem 1rem;">MAX SIZE</th>
+</tr>
+</thead>
+<tbody style="color:#C5C5D3;">
+<tr style="border-bottom:1px solid #1E1E28;">
+<td style="padding:0.75rem 1rem; color:var(--cyan); font-weight:700;">Google Veo Video</td>
+<td style="padding:0.75rem 1rem;">MP4, MOV, MKV, WEBM</td>
+<td style="padding:0.75rem 1rem;">Multi-frame adaptive sampling & discrete Veo catalogs</td>
+<td style="padding:0.75rem 1rem; color:#4ade80;">Direct stream copy (Lossless Audio)</td>
+<td style="padding:0.75rem 1rem;">100 MB</td>
+</tr>
+<tr style="border-bottom:1px solid #1E1E28;">
+<td style="padding:0.75rem 1rem; color:var(--primary-hover); font-weight:700;">Google Gemini Image</td>
+<td style="padding:0.75rem 1rem;">PNG, JPG, JPEG, WEBP</td>
+<td style="padding:0.75rem 1rem;">Discrete 0.5k-4k catalogs + bi-harmonic inpainting</td>
+<td style="padding:0.75rem 1rem; color:#4ade80;">Sub-pixel reconstruction (No halo)</td>
+<td style="padding:0.75rem 1rem;">100 MB</td>
+</tr>
+<tr style="border-bottom:1px solid #1E1E28;">
+<td style="padding:0.75rem 1rem; color:var(--amber); font-weight:700;">Google SynthID Disrupter</td>
+<td style="padding:0.75rem 1rem;">PNG, JPG, WEBP</td>
+<td style="padding:0.75rem 1rem;">0.997 Lanczos scale, 2px border crop, spatial frequency dither</td>
+<td style="padding:0.75rem 1rem; color:#E8A33D;">Visually imperceptible perturbation</td>
+<td style="padding:0.75rem 1rem;">100 MB</td>
+</tr>
+<tr>
+<td style="padding:0.75rem 1rem; color:#2FD3E1; font-weight:700;">C2PA & Provenance Cleaner</td>
+<td style="padding:0.75rem 1rem;">PNG, JPG, JPEG</td>
+<td style="padding:0.75rem 1rem;">Byte-level chunk walker (caBX, JUMBF, A1111, ComfyUI, EXIF)</td>
+<td style="padding:0.75rem 1rem; color:#4ade80;">100% Bit-Identical Pixels (Safe Tier)</td>
+<td style="padding:0.75rem 1rem;">100 MB</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<div class="seo-title" style="margin-top:2.2rem;">
+<span style="color:var(--amber);">✦</span> 
+<span>FREQUENTLY ASKED QUESTIONS (FAQ)</span>
+</div>
+<div class="seo-subtitle">
+Direct answers to common queries regarding Google Gemini & Veo watermark removal, SynthID disruption, and C2PA sanitization.
+</div>
+
+<details class="faq-accordion">
+<summary>How do I remove the watermark from Google Gemini images? <span>▾</span></summary>
+<div class="faq-body">
+Upload your Gemini-generated image (PNG, JPG, WEBP) to Watermark Studio. The engine automatically detects the sparkle logo coordinates from discrete resolution catalogs and reconstructs the pixels with zero blurring using bi-harmonic inpainting.
+</div>
+</details>
+
+<details class="faq-accordion">
+<summary>Can it remove watermarks from Google Veo AI videos without losing audio? <span>▾</span></summary>
+<div class="faq-body">
+Yes! The pipeline samples keyframes across the video to establish consensus coordinates for the sparkle or Veo text logo, performs frame-by-frame bi-harmonic reconstruction with safety dilation, and losslessly remuxes the original audio track using FFmpeg stream copy.
+</div>
+</details>
+
+<details class="faq-accordion">
+<summary>What is Google SynthID and how is it disrupted? <span>▾</span></summary>
+<div class="faq-body">
+Google SynthID embeds imperceptible pseudo-random frequency perturbations into the latent generation process. Nuclear mode scrambles sub-LSB spatial frequency phase alignment via asymmetric Lanczos rescaling (0.997), a 2px border uncoupling crop, subtle channel bias, and spatial frequency micro-dithering.
+</div>
+</details>
+
+<details class="faq-accordion">
+<summary>What is C2PA Content Credentials and how is it removed? <span>▾</span></summary>
+<div class="faq-body">
+C2PA (Coalition for Content Provenance and Authenticity) embeds provenance metadata manifests into image containers (caBX chunks in PNG and APP11 JUMBF segments in JPEG). The engine parses containers at the byte level and losslessly strips all provenance, AI prompts, and EXIF tracking while keeping pixels bit-identical.
+</div>
+</details>
+
+<details class="faq-accordion">
+<summary>What are the differences between Safe, Paranoid, and Nuclear cleaning modes? <span>▾</span></summary>
+<div class="faq-body">
+Safe mode is 100% lossless and bit-identical, removing C2PA manifests, AI generation prompts, and EXIF/GPS data without altering a single pixel. Paranoid mode adds sRGB profile standardization and micro-dithering to neutralize camera PRNU and JPEG quantization fingerprints. Nuclear mode actively disrupts SynthID and latent watermarks via spatial-frequency phase scrambling.
+</div>
+</details>
+
+<details class="faq-accordion">
+<summary>Is Watermark Studio free and private? <span>▾</span></summary>
+<div class="faq-body">
+Yes, it is 100% free and open-source under the MIT license. All media processing happens locally in isolated temporary memory within your session. Files are never stored on cloud servers or sent to external AI APIs.
+</div>
+</details>
+</section>"""
+
+
+def render_notebooklm_workspace(nlm_engine_choice: Optional[str] = None, *args, **kwargs):
+    st.markdown(
+        """
+        <div class="header-top">
+            <span class="eyebrow-cyan">NOTEBOOKLM PRESENTATION & VIDEO STUDIO</span>
+            <div class="header-core-badge">
+                <span class="pulse-dot"></span>
+                <span>PDF, SLIDES & VIDEO READY</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown('<h1 class="main-title">NotebookLM Logo & Watermark Cleaner</h1>', unsafe_allow_html=True)
+    st.markdown(
+        '<p class="main-lede">Air-gapped, zero-upload local cleaner for Google NotebookLM & Gemini Notebook presentation decks, slide graphics, and audio overview MP4 videos with 100% lossless audio preservation.</p>',
+        unsafe_allow_html=True,
+    )
+
+    tab_video, tab_pdf, tab_img = st.tabs([
+        "🎬 NotebookLM Video Cleaner (MP4 / MOV)",
+        "📑 Multi-Page PDF & Slide Decks (In-Browser)",
+        "🔬 Slide Image Laboratory (PNG / JPG)",
+    ])
+
+    with tab_video:
+        st.markdown(
+            """
+            <div class="section-header-bar">
+                <span class="section-title-tag">01 / NOTEBOOKLM VIDEO INPUT</span>
+                <span class="pipeline-badge">LOSSLESS AUDIO PASSTHROUGH</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        sample_portrait_path = Path("/Users/kalash/Desktop/watermark0remover/How_to_Scale_PSI_for_Data_Drift.mp4")
+        sample_landscape_path = Path("/Users/kalash/Desktop/watermark0remover/PR-Agent__Open-Source_Review.mp4")
+
+        col_samp1, col_samp2 = st.columns(2)
+        with col_samp1:
+            if sample_portrait_path.exists():
+                if st.button("📱 Load Portrait 9:16 Video (How to Scale PSI)", key="btn_load_port_sample"):
+                    st.session_state["nlm_active_video"] = str(sample_portrait_path)
+        with col_samp2:
+            if sample_landscape_path.exists():
+                if st.button("🖥️ Load Landscape 16:9 Video (PR-Agent Review)", key="btn_load_land_sample"):
+                    st.session_state["nlm_active_video"] = str(sample_landscape_path)
+
+        uploaded_video = st.file_uploader(
+            "Upload NotebookLM or Gemini Notebook Video",
+            type=["mp4", "mov", "webm", "mkv"],
+            key="nlm_video_uploader",
+            help="Upload an MP4 or MOV exported from NotebookLM or Gemini Studio",
+        )
+
+        target_video_path = None
+        if uploaded_video is not None:
+            t_file = tempfile.NamedTemporaryFile(delete=False, suffix=f"_{uploaded_video.name}")
+            t_file.write(uploaded_video.read())
+            t_file.close()
+            target_video_path = t_file.name
+        elif "nlm_active_video" in st.session_state and Path(st.session_state["nlm_active_video"]).exists():
+            target_video_path = st.session_state["nlm_active_video"]
+
+        if target_video_path:
+            cap = cv2.VideoCapture(target_video_path)
+            fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+            tot_f = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            vw = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            vh = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            dur = tot_f / fps if fps > 0 else 0
+
+            ret, first_frame = cap.read()
+            cap.release()
+
+            is_portrait = vh > vw
+            st.markdown(
+                f"""
+                <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:1rem; margin-top:0.5rem;">
+                    <span class="format-tag" style="background:#141418; border:1px solid #262633; padding:4px 10px; border-radius:4px; font-family:'JetBrains Mono', monospace; font-size:0.75rem; color:var(--cyan);">DIMENSIONS: {vw}x{vh}</span>
+                    <span class="format-tag" style="background:#141418; border:1px solid #262633; padding:4px 10px; border-radius:4px; font-family:'JetBrains Mono', monospace; font-size:0.75rem; color:var(--amber);">DURATION: {dur:.1f}s ({tot_f} frames @ {fps:.0f}fps)</span>
+                    <span class="format-tag" style="background:#141418; border:1px solid #262633; padding:4px 10px; border-radius:4px; font-family:'JetBrains Mono', monospace; font-size:0.75rem; color:#C084FC;">ASPECT: {'PORTRAIT 9:16' if is_portrait else 'LANDSCAPE 16:9'}</span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            detected_box = get_notebooklm_box(vw, vh)
+            col_v1, col_v2 = st.columns(2, gap="medium")
+
+            with col_v1:
+                st.markdown(
+                    """
+                    <div class="compare-header">
+                        <span class="compare-header-title">SOURCE VIDEO PLAYER</span>
+                        <span style="font-family:'JetBrains Mono', monospace; font-size:0.65rem; color:var(--amber); font-weight:700;">WITH WATERMARK</span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                st.video(target_video_path)
+
+            with col_v2:
+                st.markdown(
+                    """
+                    <div class="compare-header">
+                        <span class="compare-header-title">FRAME 0 · WATERMARK TARGET HUD</span>
+                        <span style="font-family:'JetBrains Mono', monospace; font-size:0.65rem; color:var(--cyan); font-weight:700;">CORNER RETICLE</span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                if ret and first_frame is not None:
+                    ff_rgb = cv2.cvtColor(first_frame, cv2.COLOR_BGR2RGB)
+                    ff_pil = Image.fromarray(ff_rgb)
+                    hud_img = draw_notebooklm_reticle(ff_pil, detected_box)
+                    ui_image(hud_img)
+
+            col_c1, col_c2 = st.columns(2)
+            with col_c1:
+                vid_method = st.selectbox(
+                    "Video Repair Method",
+                    ["gradient_patch", "inpaint"],
+                    format_func=lambda m: {
+                        "gradient_patch": "Boundary Gradient Patch (Crisp & Zero Blur)",
+                        "inpaint": "OpenCV Telea Inpaint",
+                    }[m],
+                    key="nlm_vid_method",
+                )
+            with col_c2:
+                default_feather = 10 if is_portrait else 4
+                vid_feather = st.slider("Boundary Feather Radius (px)", 2, 20, default_feather, 2, key="nlm_vid_feather")
+
+            col_t1, col_t2 = st.columns([3, 2])
+            with col_t1:
+                trim_outro = st.checkbox(
+                    "✂ Trim Outro Slate (Removes End Card)",
+                    value=True,
+                    help="Google NotebookLM automatically appends a ~3-second animated outro card with its logo at the end of video exports. Checking this cleanly cuts the outro card while keeping audio 100% in sync.",
+                    key="nlm_trim_outro_cb",
+                )
+            with col_t2:
+                trim_seconds = st.number_input(
+                    "Trim Duration (seconds)",
+                    min_value=0.0,
+                    max_value=30.0,
+                    value=3.0,
+                    step=0.5,
+                    disabled=not trim_outro,
+                    key="nlm_trim_sec_input",
+                )
+
+            if st.button("🚀 Clean NotebookLM Video (Preserve Audio)", key="btn_clean_nlm_vid", type="primary"):
+                out_clean_vid = tempfile.NamedTemporaryFile(delete=False, suffix="_nlm_cleaned.mp4").name
+                prog_bar = st.progress(0, text="Initializing NotebookLM video cleaner...")
+
+                def on_video_progress(curr, total):
+                    pct = min(1.0, float(curr) / float(max(1, total)))
+                    prog_bar.progress(pct, text=f"Cleaning frames: {curr}/{total} ({pct*100:.1f}%)")
+
+                with st.spinner("Processing video frames and remuxing original audio..."):
+                    t0 = time.time()
+                    clean_notebooklm_video(
+                        target_video_path,
+                        out_clean_vid,
+                        method=vid_method,
+                        feather=vid_feather,
+                        custom_box=detected_box,
+                        progress_callback=on_video_progress,
+                        trim_end_seconds=trim_seconds if trim_outro else 0.0,
+                    )
+                    prog_bar.progress(1.0, text=f"Finished in {time.time()-t0:.1f}s!")
+
+                st.success(f"✓ Video cleaned successfully in {time.time()-t0:.1f}s with 100% lossless audio copying!")
+                st.video(out_clean_vid)
+
+                with open(out_clean_vid, "rb") as vf:
+                    v_bytes = vf.read()
+                st.download_button(
+                    "⬇ Download Cleaned Video (MP4)",
+                    data=v_bytes,
+                    file_name="notebooklm_video_clean.mp4",
+                    mime="video/mp4",
+                    key="nlm_download_vid_btn",
+                )
+
+    with tab_pdf:
+        st.markdown(
+            """
+            <div class="section-header-bar">
+                <span class="section-title-tag">01 / MULTI-PAGE PDF & SLIDE DECK STUDIO</span>
+                <span class="pipeline-badge">IN-BROWSER ENGINE (100% CLIENT-SIDE)</span>
+            </div>
+            <div style="background:#141418; border:1px solid #262633; border-radius:8px; padding:0.9rem 1.2rem; margin-bottom:1.2rem;">
+                <div style="font-family:'Sora', sans-serif; font-weight:700; color:#FFFFFF; font-size:1.02rem; margin-bottom:0.2rem;">
+                    Instant In-Browser Presentation Cleaner
+                </div>
+                <div style="font-size:0.84rem; color:var(--text-muted); line-height:1.5;">
+                    Runs 100% locally in your browser sandbox using <code>pdf.js</code> and <code>jspdf</code>. 
+                    Upload multi-page PDF presentation decks exported from Google NotebookLM. Every page is rendered at 2× scale, patched with gradient feathering, and repacked into a pristine PDF with zero cloud upload.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        html_path = APP_DIR / "static" / "notebooklm_embedded.html"
+        if html_path.exists():
+            components.html(html_path.read_text(encoding="utf-8"), height=520, scrolling=False)
+        else:
+            st.error("Embedded presentation cleaner component not found.")
+
+    with tab_img:
+        st.markdown(
+            """
+            <div class="section-header-bar">
+                <span class="section-title-tag">01 / SLIDE IMAGE INPUT</span>
+                <span class="pipeline-badge">PYTHON PRECISION LAB</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        nlm_file = st.file_uploader(
+            "Upload NotebookLM Slide Image",
+            type=["png", "jpg", "jpeg", "webp"],
+            key="nlm_file_uploader",
+            help="Upload a single slide screenshot or infographic image (PNG/JPG)",
+        )
+
+        if nlm_file is not None:
+            raw_bytes = nlm_file.read()
+            pil_img = Image.open(io.BytesIO(raw_bytes))
+            w, h = pil_img.size
+
+            detected_box = get_notebooklm_box(w, h)
+            img_bgr = cv2.cvtColor(np.array(pil_img.convert("RGB")), cv2.COLOR_RGB2BGR)
+            bx, by, bw, bh = detected_box["x"], detected_box["y"], detected_box["width"], detected_box["height"]
+            roi = img_bgr[by : by + bh, bx : bx + bw]
+            light_slide = is_light_background(roi)
+
+            col_s1, col_s2, col_s3 = st.columns(3)
+            with col_s1:
+                nlm_method = st.selectbox(
+                    "Reconstruction Method",
+                    ["gradient_patch", "inpaint"],
+                    format_func=lambda m: {
+                        "gradient_patch": "Gradient Patch (Feathered - Best)",
+                        "inpaint": "OpenCV Telea Inpaint",
+                    }[m],
+                )
+            with col_s2:
+                nlm_feather = st.slider("Boundary Feather Radius", 2, 24, 8, 2)
+            with col_s3:
+                nlm_show_reticle = st.checkbox("Show Watermark Reticle Box", value=True)
+
+            polarity_label = "☀️ Light Background (Dark Text)" if light_slide else "🌙 Dark Slide (Light Text)"
+            st.markdown(
+                f"""
+                <div style="display:flex; gap:10px; margin-bottom:1rem;">
+                    <span style="background:#141418; border:1px solid #262633; padding:4px 12px; border-radius:9999px; font-family:'JetBrains Mono', monospace; font-size:0.72rem; color:var(--cyan);">POLARITY: {polarity_label}</span>
+                    <span style="background:#141418; border:1px solid #262633; padding:4px 12px; border-radius:9999px; font-family:'JetBrains Mono', monospace; font-size:0.72rem; color:var(--amber);">COORDINATES: [{bx}, {by}] - [{bx+bw}, {by+bh}]</span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            if nlm_show_reticle:
+                preview_display = draw_notebooklm_reticle(pil_img, detected_box)
+            else:
+                preview_display = pil_img
+
+            col_p1, col_p2 = st.columns(2, gap="medium")
+            with col_p1:
+                st.markdown(
+                    """
+                    <div class="compare-header">
+                        <span class="compare-header-title">SOURCE SLIDE · CORNER TARGETED</span>
+                        <span style="font-family:'JetBrains Mono', monospace; font-size:0.65rem; color:var(--amber); font-weight:700;">WATERMARK LOCATED</span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                ui_image(preview_display)
+
+            cleaned_slide = remove_notebooklm_watermark(
+                pil_img,
+                method=nlm_method,
+                feather=nlm_feather,
+                custom_box=detected_box,
+            )
+
+            with col_p2:
+                st.markdown(
+                    """
+                    <div class="compare-header" style="border-color: rgba(34, 211, 238, 0.4);">
+                        <span class="compare-header-title" style="color:var(--cyan);">✨ CLEAN SLIDE · RECONSTRUCTED</span>
+                        <span style="font-family:'JetBrains Mono', monospace; font-size:0.65rem; color:var(--cyan); font-weight:700;">WATERMARK REMOVED</span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                ui_image(cleaned_slide)
+
+            # Zoom crop comparison
+            st.markdown(
+                """
+                <div class="section-header-bar" style="margin-top:1.5rem;">
+                    <span class="section-title-tag">02 / 100% ZOOM CROP INSPECTION</span>
+                    <span class="pipeline-badge">CORNER REGION</span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            crop_orig = make_zoom_crop(pil_img, detected_box, pad=32)
+            crop_clean = make_zoom_crop(cleaned_slide, detected_box, pad=32)
+            col_z1, col_z2 = st.columns(2, gap="medium")
+            with col_z1:
+                st.caption("Source Watermark Area (Original)")
+                ui_image(crop_orig)
+            with col_z2:
+                st.caption("Patched Watermark Area (Reconstructed)")
+                ui_image(crop_clean)
+
+            # Difference Heatmap
+            diff_map = make_difference_heatmap(pil_img, cleaned_slide, detected_box, pad=32)
+            with st.expander("Forensic Difference Heatmap (Delta Pixels)", expanded=False):
+                st.caption("Shows pixel differences scaled by 4×. Black indicates identical unmodified pixels.")
+                ui_image(diff_map)
+
+            buf = io.BytesIO()
+            cleaned_slide.save(buf, format="PNG")
+            st.download_button(
+                "⬇ Download Cleaned Slide (PNG)",
+                data=buf.getvalue(),
+                file_name=f"{Path(nlm_file.name).stem}_clean.png",
+                mime="image/png",
+            )
+
+    with st.expander("⚡ NotebookLM Batch Processing CLI Reference", expanded=False):
+        st.markdown(
+            """
+            Process entire folders of NotebookLM slide screenshots or videos directly from your terminal:
+            ```bash
+            # Clean a NotebookLM video (automatically trims 3s outro card & preserves lossless audio):
+            python3 notebooklm_cleaner.py video.mp4 video_cleaned.mp4
+
+            # Clean without trimming the outro card:
+            python3 notebooklm_cleaner.py video.mp4 video_cleaned.mp4 --no-trim
+
+            # Custom outro trim duration (e.g. 2.5 seconds):
+            python3 notebooklm_cleaner.py video.mp4 video_cleaned.mp4 --trim-end 2.5
+
+            # Clean a single slide image:
+            python3 notebooklm_cleaner.py slide.png cleaned_slide.png
+
+            # Clean a NotebookLM presentation or overview video with lossless audio:
+            python3 notebooklm_cleaner.py video.mp4 video_cleaned.mp4
+
+            # Batch clean an entire presentation folder:
+            # Batch clean an entire presentation folder of slides or videos:
+            python3 notebooklm_cleaner.py ./my_presentation_slides/ ./cleaned_presentation/
+
+            # Adjust feather smoothing radius:
+            python3 notebooklm_cleaner.py slide.png cleaned.png --feather 16 --method gradient_patch
+            ```
+            """
+        )
+
+
 # -----------------------------------------------------------------------------
 # Sidebar: Parameters & Engine Controls (Cyber-Red / Obsidian / Cyan)
 # -----------------------------------------------------------------------------
@@ -960,10 +1483,10 @@ with st.sidebar:
     st.markdown(
         """
         <div class="sidebar-brand">
-            <span class="sidebar-brand-title">GEMINI REMOVER</span>
+            <span class="sidebar-brand-title">WATERMARK STUDIO</span>
             <div class="sidebar-brand-pill">
                 <span class="dot"></span>
-                <span>CORE 01</span>
+                <span>AIR-GAPPED</span>
             </div>
         </div>
         """,
@@ -971,97 +1494,123 @@ with st.sidebar:
     )
     st.markdown('<div class="sidebar-rule"></div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="sidebar-section-kicker">ENGINE CALIBRATION</div>', unsafe_allow_html=True)
-    method = st.selectbox(
-        "Processing method",
-        ["inpaint", "reconstruct", "math"],
-        format_func=lambda value: {
-            "reconstruct": "Line reconstruction (Cleanest)",
-            "inpaint": "OpenCV bi-harmonic fill",
-            "math": "Alpha unblending",
-        }[value],
-        help="Select mathematical algorithm. Line reconstruction rebuilds marked rows from nearby pixels and eliminates halo clipping.",
+    st.markdown('<div class="sidebar-section-kicker">STUDIO WORKSPACE</div>', unsafe_allow_html=True)
+    active_workspace = st.selectbox(
+        "Workspace Tool",
+        ["gemini_veo", "notebooklm"],
+        format_func=lambda w: {
+            "gemini_veo": "✦ Gemini & Veo (Images & Video)",
+            "notebooklm": "📑 NotebookLM Studio (PDFs, Slides & Video)",
+        }[w],
+        label_visibility="collapsed",
     )
-    method_details = {
-        "inpaint": "OpenCV Telea fast bi-harmonic fill for textured backgrounds.",
-        "reconstruct": "Rebuilds marked rows from nearby pixels and keeps edges stable.",
-        "math": "Mathematically reverses the semi-transparent sparkle overlay.",
-    }
-    st.caption(method_details[method])
-
-    gain = st.slider(
-        "Watermark strength",
-        0.10,
-        1.50,
-        0.60,
-        0.05,
-        help="Deletion intensity. 0.60 matches current Gemini outputs; increase only if traces remain.",
-    )
-    size_scale = st.slider(
-        "Mask scale",
-        0.50,
-        1.80,
-        1.00,
-        0.05,
-        help="Bounding box dilation factor. 1.00 matches standard detected logo size.",
-    )
-    preset = st.selectbox(
-        "Watermark preset",
-        [
-            "auto",
-            "veo_inset",
-            "veo_standard",
-            "veo_compact",
-            "corner",
-            "veo_text",
-        ],
-        format_func=lambda value: {
-            "auto": "✦ Auto Detect (Catalog + Multi-Scale)",
-            "veo_inset": "Veo Inset (Margin 144 / Adaptive)",
-            "veo_standard": "Veo Standard (Margin 108)",
-            "veo_compact": "Veo Compact (Margin 29/40)",
-            "corner": "Corner (Exact Viewport Edge)",
-            "veo_text": "Veo Text Logo ('Veo' Watermark)",
-        }.get(value, value),
-        help="Catalog-assisted geometry targeting. Auto Detect searches discrete size catalogs and multi-scale priors.",
-    )
-
-    st.markdown('<div class="sidebar-section-kicker" style="margin-top:1.2rem;">SYNTHID & PROVENANCE</div>', unsafe_allow_html=True)
-    synthid_mode = st.selectbox(
-        "SynthID & Metadata Scrub",
-        [
-            "none",
-            "safe",
-            "paranoid",
-            "nuclear",
-        ],
-        format_func=lambda val: {
-            "none": "Off (Visible Mark Only)",
-            "safe": "🛡️ Safe (Lossless C2PA & Metadata Strip)",
-            "paranoid": "🔒 Paranoid (Strip + DQT Dither)",
-            "nuclear": "⚡ Nuclear (Disrupt SynthID & Latent Marks)",
-        }.get(val, val),
-        help=(
-            "Safe: strips C2PA manifests and AI prompts losslessly (bit-identical pixels). "
-            "Paranoid: neutralizes JPEG quantization camera signatures. "
-            "Nuclear: scrambles sub-LSB spatial frequency phase to disrupt Google SynthID."
-        ),
-    )
-
     st.markdown('<div class="sidebar-rule"></div>', unsafe_allow_html=True)
-    with st.expander("How the local reconstruction works"):
-        st.markdown(
-            """
-            **Line Reconstruction & Smart Inpainting**  
-            Scans watermark contours and reconstructs damaged pixel rows horizontally from clean perimeter samples, with safety dilation zones that eliminate halo artifacts.
 
-            **Official Discrete Catalogs (Image & Video)**  
-            Matches input against discrete 0.5k, 1k, 2k, 4k image size priors and Google Veo discrete 1080p/720p portrait/landscape video catalogs (margins 144, 108, 96, 72, 40). Also includes multi-scale template matching for Veo text watermarks.
-
-            **100% On-Device & Air-Gapped**  
-            Zero cloud endpoints. Pixel calculations run purely inside this local Python execution thread.
-            """
+    if active_workspace == "gemini_veo":
+        st.markdown('<div class="sidebar-section-kicker">ENGINE CALIBRATION</div>', unsafe_allow_html=True)
+        method = st.selectbox(
+            "Processing method",
+            ["inpaint", "reconstruct", "math"],
+            format_func=lambda value: {
+                "reconstruct": "Line reconstruction (Cleanest)",
+                "inpaint": "OpenCV bi-harmonic fill",
+                "math": "Alpha unblending",
+            }[value],
+            help="Select mathematical algorithm. Line reconstruction rebuilds marked rows from nearby pixels and eliminates halo clipping.",
         )
+        method_details = {
+            "inpaint": "OpenCV Telea fast bi-harmonic fill for textured backgrounds.",
+            "reconstruct": "Rebuilds marked rows from nearby pixels and keeps edges stable.",
+            "math": "Mathematically reverses the semi-transparent sparkle overlay.",
+        }
+        st.caption(method_details[method])
+
+        gain = st.slider(
+            "Watermark strength",
+            0.10,
+            1.50,
+            0.60,
+            0.05,
+            help="Deletion intensity. 0.60 matches current Gemini outputs; increase only if traces remain.",
+        )
+        size_scale = st.slider(
+            "Mask scale",
+            0.50,
+            1.80,
+            1.00,
+            0.05,
+            help="Bounding box dilation factor. 1.00 matches standard detected logo size.",
+        )
+        preset = st.selectbox(
+            "Watermark preset",
+            [
+                "auto",
+                "veo_inset",
+                "veo_standard",
+                "veo_compact",
+                "corner",
+                "veo_text",
+            ],
+            format_func=lambda value: {
+                "auto": "✦ Auto Detect (Catalog + Multi-Scale)",
+                "veo_inset": "Veo Inset (Margin 144 / Adaptive)",
+                "veo_standard": "Veo Standard (Margin 108)",
+                "veo_compact": "Veo Compact (Margin 29/40)",
+                "corner": "Corner (Exact Viewport Edge)",
+                "veo_text": "Veo Text Logo ('Veo' Watermark)",
+            }.get(value, value),
+            help="Catalog-assisted geometry targeting. Auto Detect searches discrete size catalogs and multi-scale priors.",
+        )
+
+        st.markdown('<div class="sidebar-section-kicker" style="margin-top:1.2rem;">SYNTHID & PROVENANCE</div>', unsafe_allow_html=True)
+        synthid_mode = st.selectbox(
+            "SynthID & Metadata Scrub",
+            [
+                "none",
+                "safe",
+                "paranoid",
+                "nuclear",
+            ],
+            format_func=lambda val: {
+                "none": "Off (Visible Mark Only)",
+                "safe": "🛡️ Safe (Lossless C2PA & Metadata Strip)",
+                "paranoid": "🔒 Paranoid (Strip + DQT Dither)",
+                "nuclear": "⚡ Nuclear (Disrupt SynthID & Latent Marks)",
+            }.get(val, val),
+            help=(
+                "Safe: strips C2PA manifests and AI prompts losslessly (bit-identical pixels). "
+                "Paranoid: neutralizes JPEG quantization camera signatures. "
+                "Nuclear: scrambles sub-LSB spatial frequency phase to disrupt Google SynthID."
+            ),
+        )
+
+        st.markdown('<div class="sidebar-rule"></div>', unsafe_allow_html=True)
+        with st.expander("How the local reconstruction works"):
+            st.markdown(
+                """
+                **Line Reconstruction & Smart Inpainting**  
+                Scans watermark contours and reconstructs damaged pixel rows horizontally from clean perimeter samples, with safety dilation zones that eliminate halo artifacts.
+
+                **Official Discrete Catalogs (Image & Video)**  
+                Matches input against discrete 0.5k, 1k, 2k, 4k image size priors and Google Veo discrete 1080p/720p portrait/landscape video catalogs (margins 144, 108, 96, 72, 40). Also includes multi-scale template matching for Veo text watermarks.
+
+                **100% On-Device & Air-Gapped**  
+                Zero cloud endpoints. Pixel calculations run purely inside this local Python execution thread.
+                """
+            )
+    else:
+        st.markdown('<div class="sidebar-section-kicker">NOTEBOOKLM WORKSPACE</div>', unsafe_allow_html=True)
+        st.info("💡 **Active Workspace**: Use the main tabs on screen to switch between **Video Cleaner**, **PDF Presentations**, and **Slide Images**.")
+        st.caption("Air-gapped cleanroom logo removal for NotebookLM slides, decks, and audio overview videos.")
+
+# -----------------------------------------------------------------------------
+# Main Routing: NotebookLM vs Gemini & Veo
+# -----------------------------------------------------------------------------
+if active_workspace == "notebooklm":
+    render_notebooklm_workspace()
+    render_html(SEO_KNOWLEDGE_HTML)
+    st.markdown('<div class="cleanroom-footer">WATERMARK STUDIO · NOTEBOOKLM DECK & VIDEO CLEANER · 100% PRIVATE AIR-GAPPED WORKSPACE · Built by DeveloperOS</div>', unsafe_allow_html=True)
+    st.stop()
 
 # -----------------------------------------------------------------------------
 # Main Header (Stitch Architecture)
@@ -1635,147 +2184,7 @@ if uploaded is not None:
 # -----------------------------------------------------------------------------
 # SEO Knowledge Hub, Technical Specifications, and FAQs
 # -----------------------------------------------------------------------------
-SEO_KNOWLEDGE_HTML = """<section class="seo-section" aria-label="Technical Guide and FAQ">
-<div class="seo-title">
-<span style="color:var(--primary);">✦</span> 
-<span>HOW IT WORKS · PIXEL RECONSTRUCTION & SYNTHID DISRUPTION</span>
-</div>
-<div class="seo-subtitle">
-Most generic watermark tools rely on heavy neural diffusion inpainting that smears background textures and leaves visible blur circles. 
-<strong>DeveloperOS Watermark Studio</strong> utilizes mathematical logo inverse modeling, multi-frame keyframe consensus, bi-harmonic inpainting, 
-and sub-LSB spatial frequency phase scrambling to restore pristine pixel values, disrupt DeepMind SynthID, and strip C2PA manifests without loss of clarity or audio tracks.
-</div>
-
-<div class="seo-grid">
-<div class="seo-card">
-<h3>01 / Multi-Frame Keyframe Consensus</h3>
-<p>Scans keyframes across the first 3 seconds of video to detect the exact sub-pixel coordinates of the Google Veo / Gemini sparkle watermark, overcoming scene transitions and motion blur.</p>
-</div>
-<div class="seo-card">
-<h3>02 / Bi-Harmonic Row Reconstruction</h3>
-<p>Reconstructs masked watermark pixels horizontally using clean boundary pixels, eliminating anti-aliasing ghosting and preserving high-frequency textures behind the logo.</p>
-</div>
-<div class="seo-card">
-<h3>03 / Lossless Audio Passthrough</h3>
-<p>Muxes the original AAC/MP3 audio stream directly into the clean video container using FFmpeg, ensuring zero audio degradation, volume clipping, or track desync.</p>
-</div>
-<div class="seo-card">
-<h3>04 / 100% Private & Air-Gapped</h3>
-<p>Processing executes strictly in temporary memory within your browser session. Files are never stored on external databases or sent to third-party AI APIs.</p>
-</div>
-<div class="seo-card">
-<h3>05 / Google SynthID Disruption</h3>
-<p>DeepMind SynthID embeds imperceptible pseudo-random frequency perturbations. Nuclear mode applies 0.997 Lanczos rescaling, 2px border uncoupling, and micro-dither to scramble sub-LSB phase synchronization.</p>
-</div>
-<div class="seo-card">
-<h3>06 / C2PA & Provenance Stripping</h3>
-<p>Performs byte-level container chunk walking (PNG caBX chunks, JPEG APP11 JUMBF segments) to purge Content Credentials, AI generation prompts, and EXIF/GPS tracking while leaving pixels bit-identical in Safe mode.</p>
-</div>
-</div>
-
-<div class="seo-title" style="margin-top:2.2rem;">
-<span style="color:var(--cyan);">✦</span> 
-<span>TECHNICAL SPECIFICATIONS & PRESETS MATRIX</span>
-</div>
-<div class="seo-subtitle">
-Engineered for high-throughput video pipelines, creator workflows, and forensic image sanitization.
-</div>
-
-<div style="overflow-x:auto; margin-bottom: 2rem;">
-<table style="width:100%; border-collapse: collapse; font-family:'JetBrains Mono', monospace; font-size:0.8rem; text-align:left; background:#14141A; border:1px solid #282836; border-radius:8px;">
-<thead>
-<tr style="background:#1B1B24; border-bottom:1px solid #282836; color:var(--text-main);">
-<th style="padding:0.75rem 1rem;">PIPELINE ASSET</th>
-<th style="padding:0.75rem 1rem;">SUPPORTED FORMATS</th>
-<th style="padding:0.75rem 1rem;">DETECTION & CLEANING STRATEGY</th>
-<th style="padding:0.75rem 1rem;">PIXEL & AUDIO INTEGRITY</th>
-<th style="padding:0.75rem 1rem;">MAX SIZE</th>
-</tr>
-</thead>
-<tbody style="color:#C5C5D3;">
-<tr style="border-bottom:1px solid #1E1E28;">
-<td style="padding:0.75rem 1rem; color:var(--cyan); font-weight:700;">Google Veo Video</td>
-<td style="padding:0.75rem 1rem;">MP4, MOV, MKV, WEBM</td>
-<td style="padding:0.75rem 1rem;">Multi-frame adaptive sampling & discrete Veo catalogs</td>
-<td style="padding:0.75rem 1rem; color:#4ade80;">Direct stream copy (Lossless Audio)</td>
-<td style="padding:0.75rem 1rem;">100 MB</td>
-</tr>
-<tr style="border-bottom:1px solid #1E1E28;">
-<td style="padding:0.75rem 1rem; color:var(--primary-hover); font-weight:700;">Google Gemini Image</td>
-<td style="padding:0.75rem 1rem;">PNG, JPG, JPEG, WEBP</td>
-<td style="padding:0.75rem 1rem;">Discrete 0.5k-4k catalogs + bi-harmonic inpainting</td>
-<td style="padding:0.75rem 1rem; color:#4ade80;">Sub-pixel reconstruction (No halo)</td>
-<td style="padding:0.75rem 1rem;">100 MB</td>
-</tr>
-<tr style="border-bottom:1px solid #1E1E28;">
-<td style="padding:0.75rem 1rem; color:var(--amber); font-weight:700;">Google SynthID Disrupter</td>
-<td style="padding:0.75rem 1rem;">PNG, JPG, WEBP</td>
-<td style="padding:0.75rem 1rem;">0.997 Lanczos scale, 2px border crop, spatial frequency dither</td>
-<td style="padding:0.75rem 1rem; color:#E8A33D;">Visually imperceptible perturbation</td>
-<td style="padding:0.75rem 1rem;">100 MB</td>
-</tr>
-<tr>
-<td style="padding:0.75rem 1rem; color:#2FD3E1; font-weight:700;">C2PA & Provenance Cleaner</td>
-<td style="padding:0.75rem 1rem;">PNG, JPG, JPEG</td>
-<td style="padding:0.75rem 1rem;">Byte-level chunk walker (caBX, JUMBF, A1111, ComfyUI, EXIF)</td>
-<td style="padding:0.75rem 1rem; color:#4ade80;">100% Bit-Identical Pixels (Safe Tier)</td>
-<td style="padding:0.75rem 1rem;">100 MB</td>
-</tr>
-</tbody>
-</table>
-</div>
-
-<div class="seo-title" style="margin-top:2.2rem;">
-<span style="color:var(--amber);">✦</span> 
-<span>FREQUENTLY ASKED QUESTIONS (FAQ)</span>
-</div>
-<div class="seo-subtitle">
-Direct answers to common queries regarding Google Gemini & Veo watermark removal, SynthID disruption, and C2PA sanitization.
-</div>
-
-<details class="faq-accordion">
-<summary>How do I remove the watermark from Google Gemini images? <span>▾</span></summary>
-<div class="faq-body">
-Upload your Gemini-generated image (PNG, JPG, WEBP) to DeveloperOS Watermark Studio. The engine automatically detects the sparkle logo coordinates from discrete resolution catalogs and reconstructs the pixels with zero blurring using bi-harmonic inpainting.
-</div>
-</details>
-
-<details class="faq-accordion">
-<summary>Can it remove watermarks from Google Veo AI videos without losing audio? <span>▾</span></summary>
-<div class="faq-body">
-Yes! The pipeline samples keyframes across the video to establish consensus coordinates for the sparkle or Veo text logo, performs frame-by-frame bi-harmonic reconstruction with safety dilation, and losslessly remuxes the original audio track using FFmpeg stream copy.
-</div>
-</details>
-
-<details class="faq-accordion">
-<summary>What is Google SynthID and how does DeveloperOS disrupt it? <span>▾</span></summary>
-<div class="faq-body">
-Google SynthID embeds imperceptible pseudo-random frequency perturbations into the latent generation process. DeveloperOS's Nuclear mode scrambles sub-LSB spatial frequency phase alignment via asymmetric Lanczos rescaling (0.997), a 2px border uncoupling crop, subtle channel bias, and spatial frequency micro-dithering.
-</div>
-</details>
-
-<details class="faq-accordion">
-<summary>What is C2PA Content Credentials and how does DeveloperOS remove it? <span>▾</span></summary>
-<div class="faq-body">
-C2PA (Coalition for Content Provenance and Authenticity) embeds provenance metadata manifests into image containers (caBX chunks in PNG and APP11 JUMBF segments in JPEG). DeveloperOS parses containers at the byte level and losslessly strips all provenance, AI prompts, and EXIF tracking while keeping pixels bit-identical.
-</div>
-</details>
-
-<details class="faq-accordion">
-<summary>What are the differences between Safe, Paranoid, and Nuclear cleaning modes? <span>▾</span></summary>
-<div class="faq-body">
-Safe mode is 100% lossless and bit-identical, removing C2PA manifests, AI generation prompts, and EXIF/GPS data without altering a single pixel. Paranoid mode adds sRGB profile standardization and micro-dithering to neutralize camera PRNU and JPEG quantization fingerprints. Nuclear mode actively disrupts SynthID and latent watermarks via spatial-frequency phase scrambling.
-</div>
-</details>
-
-<details class="faq-accordion">
-<summary>Is DeveloperOS Gemini Watermark Remover free and private? <span>▾</span></summary>
-<div class="faq-body">
-Yes, it is 100% free and open-source under the MIT license. All media processing happens locally in isolated temporary memory within your session. Files are never stored on cloud servers or sent to external AI APIs.
-</div>
-</details>
-</section>"""
-
 render_html(SEO_KNOWLEDGE_HTML)
 
-st.markdown('<div class="cleanroom-footer">DEVELOPEROS · GEMINI WATERMARK REMOVER · 100% PRIVATE AIR-GAPPED WORKSPACE</div>', unsafe_allow_html=True)
+st.markdown('<div class="cleanroom-footer">WATERMARK STUDIO · GEMINI & VEO REMOVER · 100% PRIVATE AIR-GAPPED WORKSPACE · Built by DeveloperOS</div>', unsafe_allow_html=True)
+

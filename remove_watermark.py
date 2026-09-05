@@ -795,6 +795,7 @@ def remove_watermark_from_video(
     preset: str = "auto",
     method: str = "inpaint",
     progress_callback: callable | None = None,
+    trim_end_seconds: float | None = None,
 ) -> dict:
     if mask_path is None or not Path(mask_path).exists():
         candidates = [
@@ -818,6 +819,18 @@ def remove_watermark_from_video(
     height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
     frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    effective_trim = trim_end_seconds
+    if effective_trim is None:
+        effective_trim = 3.0 if preset == "notebooklm" else 0.0
+
+    total_duration = frame_count / fps if fps > 0 else 0
+    if effective_trim > 0 and total_duration > effective_trim:
+        target_duration = max(0.1, total_duration - effective_trim)
+        frames_to_process = max(1, int(round(target_duration * fps)))
+    else:
+        target_duration = total_duration
+        frames_to_process = frame_count
 
     sample_indices = [0]
     if frame_count > 1:
@@ -866,6 +879,50 @@ def remove_watermark_from_video(
             "preset": text_detected["preset"],
             "type": "text",
         }
+        inpaint_mask = np.ones((box["height"], box["width"]), dtype=np.uint8) * 255
+        alpha = None
+        active = None
+    elif preset == "notebooklm":
+        is_portrait = height > width
+        if is_portrait:
+            wm_w = int(round(width * 0.2722))
+            wm_h = int(round(height * 0.0328))
+            mr = int(round(width * 0.0167))
+            mb = int(round(height * 0.0109))
+            feather = 10
+            nlm_offset_y = 6
+        else:
+            wm_w = int(round(width * 0.1220))
+            wm_h = int(round(height * 0.0400))
+            mr = int(round(width * 0.0270))
+            mb = int(round(height * 0.0460))
+            feather = 6
+            nlm_offset_y = 4
+        bx = max(0, width - wm_w - mr)
+        by = max(0, height - wm_h - mb)
+        box = {
+            "x": bx,
+            "y": by,
+            "width": wm_w,
+            "height": wm_h,
+            "size": max(wm_w, wm_h),
+            "score": 1.0,
+            "preset": "notebooklm",
+            "type": "box",
+        }
+        nlm_alpha = np.ones((wm_h, wm_w, 1), dtype=np.float32)
+        for i in range(wm_h):
+            for j in range(wm_w):
+                a = 1.0
+                if i < feather:
+                    a = min(a, float(i) / float(feather))
+                if i > wm_h - feather:
+                    a = min(a, float(wm_h - i) / float(feather))
+                if j < feather:
+                    a = min(a, float(j) / float(feather))
+                if j > wm_w - feather:
+                    a = min(a, float(wm_w - j) / float(feather))
+                nlm_alpha[i, j, 0] = a
         inpaint_mask = np.ones((box["height"], box["width"]), dtype=np.uint8) * 255
         alpha = None
         active = None
@@ -972,12 +1029,20 @@ def remove_watermark_from_video(
 
     try:
         processed = 0
-        while True:
+        while processed < frames_to_process:
             success, frame = capture.read()
             if not success:
                 break
 
-            if is_text_watermark or method == "inpaint":
+            if preset == "notebooklm":
+                bx, by = box["x"], box["y"]
+                bw, bh = box["width"], box["height"]
+                src_y = max(0, by - bh - nlm_offset_y)
+                src_patch = frame[src_y : src_y + bh, bx : bx + bw].astype(np.float32)
+                dst_patch = frame[by : by + bh, bx : bx + bw].astype(np.float32)
+                blended = (dst_patch * (1.0 - nlm_alpha) + src_patch * nlm_alpha).clip(0, 255).astype(np.uint8)
+                frame[by : by + bh, bx : bx + bw] = blended
+            elif is_text_watermark or method == "inpaint":
                 pad = 16
                 py0 = max(0, box["y"] - pad)
                 py1 = min(height, box["y"] + box["height"] + pad)
@@ -1005,6 +1070,9 @@ def remove_watermark_from_video(
                 progress_callback(processed, frame_count)
             elif frame_count and processed % 30 == 0:
                 print(f"Processed {processed}/{frame_count} frames", end="\r")
+                progress_callback(processed, frames_to_process)
+            elif frames_to_process and processed % 30 == 0:
+                print(f"Processed {processed}/{frames_to_process} frames", end="\r")
     finally:
         capture.release()
         writer.release()
@@ -1019,6 +1087,15 @@ def remove_watermark_from_video(
                         ffmpeg_bin, "-y", "-i", str(temporary_path), "-i", str(input_path),
                         "-map", "0:v:0?", "-map", "1:a?", "-c:v", "libx264", "-crf", "18",
                         "-preset", "medium", "-c:a", "copy", "-shortest", str(output_path),
+                        ffmpeg_bin, "-y",
+                        "-i", str(temporary_path),
+                        "-t", f"{target_duration:.3f}",
+                        "-i", str(input_path),
+                        "-map", "0:v:0?", "-map", "1:a?",
+                        "-c:v", "libx264", "-crf", "18",
+                        "-preset", "medium", "-c:a", "copy",
+                        "-t", f"{target_duration:.3f}",
+                        str(output_path),
                     ],
                     check=True,
                     stdout=subprocess.DEVNULL,
@@ -1030,6 +1107,9 @@ def remove_watermark_from_video(
                     [
                         ffmpeg_bin, "-y", "-i", str(temporary_path),
                         "-c:v", "libx264", "-crf", "18", "-preset", "medium", str(output_path),
+                        "-c:v", "libx264", "-crf", "18", "-preset", "medium",
+                        "-t", f"{target_duration:.3f}",
+                        str(output_path),
                     ],
                     check=True,
                     stdout=subprocess.DEVNULL,
@@ -1057,7 +1137,7 @@ def main() -> None:
     parser.add_argument("--offset-y", type=int, default=None)
     parser.add_argument(
         "--preset",
-        choices=("auto", "veo", "veo_inset", "veo_standard", "veo_compact", "corner", "veo_text"),
+        choices=("auto", "veo", "veo_inset", "veo_standard", "veo_compact", "corner", "veo_text", "notebooklm"),
         default="auto",
     )
     parser.add_argument("--method", choices=("math", "inpaint", "reconstruct"), default="inpaint")
@@ -1069,6 +1149,8 @@ def main() -> None:
         help="SynthID & fingerprint cleaning tier (safe=lossless C2PA strip, paranoid=quantization reset, nuclear=frequency disruption)",
     )
     parser.add_argument("--strip-metadata", action="store_true", help="Strip C2PA and non-essential container metadata")
+    parser.add_argument("--trim-end", type=float, default=None, help="Seconds to trim from end of video (default: 3.0 for notebooklm, 0.0 otherwise)")
+    parser.add_argument("--no-trim", dest="trim_end", action="store_const", const=0.0, help="Do not trim the end of the video")
     parser.add_argument("--inspect", action="store_true", help="Inspect file for C2PA manifests, AI prompts, and EXIF fingerprints")
     args = parser.parse_args()
 
@@ -1101,6 +1183,7 @@ def main() -> None:
             offset_y=args.offset_y,
             preset=args.preset,
             method=args.method,
+            trim_end_seconds=args.trim_end,
         )
         return
 

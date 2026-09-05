@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NotebookLM Presentation Cleaner | Watermark Studio</title>
+    <!-- Core PDF & Canvas Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #060608;
+            --bg-surface: #0B0B0D;
+            --bg-card: #141418;
+            --border: #262633;
+            --border-hover: #353545;
+            --text-main: #E4E1E7;
+            --text-muted: #9B9BAA;
+            --cyan: #2FD3E1;
+            --cyan-border: rgba(47, 211, 225, 0.35);
+            --primary: #F2482C;
+            --primary-glow: rgba(242, 72, 44, 0.45);
+            --amber: #E8A33D;
+            --purple: #9333EA;
+            --purple-dim: rgba(147, 51, 234, 0.15);
+            --purple-border: rgba(147, 51, 234, 0.4);
+            --font-sans: 'Hanken Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --font-display: 'Sora', sans-serif;
+            --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            min-height: 100vh;
+            padding: 24px 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .clean-container {
+            width: 100%;
+            max-width: 860px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .spotlight-wrapper {
+            position: relative;
+            width: 100%;
+            padding: 1px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 0 0 1px #000, 0 20px 40px -20px rgba(0,0,0,0.7);
+        }
+
+        .drop-zone {
+            position: relative;
+            height: 340px;
+            background: var(--bg-surface);
+            border-radius: 11px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1;
+            cursor: pointer;
+            border: 1px dashed var(--border);
+            transition: border-color 0.2s ease, background-color 0.2s ease;
+        }
+
+        .drop-zone:hover {
+            border-color: var(--cyan-border);
+            background-color: rgba(47, 211, 225, 0.02);
+        }
+
+        .ui-state {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transform: scale(0.98);
+            transition: all 0.3s var(--ease-out);
+            pointer-events: none;
+            z-index: 2;
+            padding: 24px;
+            text-align: center;
+        }
+
+        .ui-state.active {
+            opacity: 1;
+            transform: scale(1);
+            pointer-events: auto;
+        }
+
+        .upload-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: rgba(147, 51, 234, 0.12);
+            border: 1px solid var(--purple-border);
+            color: #C084FC;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            margin-bottom: 16px;
+            box-shadow: 0 0 16px rgba(147, 51, 234, 0.2);
+        }
+
+        .upload-title {
+            font-family: var(--font-display);
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #FFFFFF;
+            margin-bottom: 6px;
+        }
+
+        .upload-desc {
+            font-size: 0.88rem;
+            color: var(--text-muted);
+            max-width: 440px;
+            line-height: 1.5;
+            margin-bottom: 18px;
+        }
+
+        .format-tags {
+            display: flex;
+            gap: 8px;
+        }
+
+        .format-tag {
+            font-family: var(--font-mono);
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: #C084FC;
+            background: var(--purple-dim);
+            border: 1px solid var(--purple-border);
+            padding: 3px 10px;
+            border-radius: 9999px;
+            letter-spacing: 0.08em;
+        }
+
+        /* Spinner & Progress */
+        .spinner {
+            width: 44px;
+            height: 44px;
+            border: 3px solid rgba(147, 51, 234, 0.2);
+            border-top: 3px solid #C084FC;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .log-box {
+            width: 100%;
+            max-width: 460px;
+            background: #060608;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px 14px;
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            height: 90px;
+            overflow-y: auto;
+            text-align: left;
+            margin-top: 12px;
+        }
+
+        .log-line {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        /* Success Card */
+        .success-badge {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: rgba(34, 197, 94, 0.15);
+            border: 1px solid rgba(34, 197, 94, 0.4);
+            color: #22C55E;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            margin-bottom: 14px;
+        }
+
+        .file-pill {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 18px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 20px;
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .file-type-icon {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #C084FC;
+            background: var(--purple-dim);
+            border: 1px solid var(--purple-border);
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .file-details {
+            text-align: left;
+            overflow: hidden;
+        }
+
+        .file-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #FFFFFF;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-meta {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .action-row {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn-download {
+            background: #9333EA;
+            color: #FFFFFF;
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            font-weight: 700;
+            padding: 10px 22px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+        }
+
+        .btn-download:hover {
+            background: #A855F7;
+            transform: translateY(-1px);
+        }
+
+        .btn-reset {
+            background: transparent;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            font-weight: 600;
+            padding: 10px 16px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: color 0.2s ease, border-color 0.2s ease;
+        }
+
+        .btn-reset:hover {
+            color: #FFFFFF;
+            border-color: var(--border-hover);
+        }
+
+        /* Features Bar */
+        .features-strip {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px;
+            width: 100%;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px 16px;
+            text-align: left;
+        }
+
+        .feature-kicker {
+            font-family: var(--font-mono);
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: #C084FC;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .feature-body {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        #fileInput { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="clean-container">
+    <div class="spotlight-wrapper" id="spotlightCard">
+        <div class="drop-zone" id="dropZone">
+            <input type="file" id="fileInput" accept="application/pdf,image/png,image/jpeg,image/webp">
+            
+            <!-- State 1: Idle -->
+            <div class="ui-state active" id="stateIdle">
+                <div class="upload-icon">📑</div>
+                <div class="upload-title">Drop PDF Presentation Deck or Slide Images</div>
+                <div class="upload-desc">
+                    Processes entire multi-page PDF presentation decks directly in your browser memory.
+                    Zero cloud upload. 100% air-gapped local execution.
+                </div>
+                <div class="format-tags">
+                    <span class="format-tag">PDF (MULTI-PAGE)</span>
+                    <span class="format-tag">PNG</span>
+                    <span class="format-tag">JPG / WEBP</span>
+                </div>
+            </div>
+
+            <!-- State 2: Processing -->
+            <div class="ui-state" id="stateProcessing">
+                <div class="spinner"></div>
+                <div class="upload-title" id="procTitle">Cleaning Slide Deck...</div>
+                <div class="log-box" id="logContainer"></div>
+            </div>
+
+            <!-- State 3: Success -->
+            <div class="ui-state" id="stateSuccess">
+                <div class="success-badge">✓</div>
+                <div class="upload-title">Watermark Eradicated</div>
+                <div class="file-pill">
+                    <div class="file-type-icon" id="resType">PDF</div>
+                    <div class="file-details">
+                        <div class="file-name" id="resName">slides_clean.pdf</div>
+                        <div class="file-meta" id="resMeta">0.0 MB · Zero Blur Halo</div>
+                    </div>
+                </div>
+                <div class="action-row">
+                    <button class="btn-download" id="downloadBtn">
+                        <span>⬇</span> Download Clean Deck
+                    </button>
+                    <button class="btn-reset" id="resetBtn">Clean Another File</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feature highlights -->
+    <div class="features-strip">
+        <div class="feature-card">
+            <div class="feature-kicker">01 / Multi-Page Batch</div>
+            <div class="feature-body">Iterates through all pages in your PDF presentation deck at 2x crisp scale and reassembles with zero page loss.</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-kicker">02 / Gradient Patching</div>
+            <div class="feature-body">Samples clean pixels from directly above the logo with a 12px smooth feathering blend, avoiding blur halos.</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-kicker">03 / 100% Air-Gapped</div>
+            <div class="feature-body">Zero server upload. All PDF parsing and canvas patching run locally inside your browser's WebAssembly sandbox.</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const logContainer = document.getElementById('logContainer');
+
+    const uiStates = {
+        idle: document.getElementById('stateIdle'),
+        processing: document.getElementById('stateProcessing'),
+        success: document.getElementById('stateSuccess')
+    };
+
+    let processedBlob = null;
+    let originalName = 'presentation';
+    let fileTypeExt = 'pdf';
+
+    function switchState(state) {
+        Object.values(uiStates).forEach(el => el.classList.remove('active'));
+        if (uiStates[state]) uiStates[state].classList.add('active');
+    }
+
+    function appendLog(msg, status = 'OK') {
+        const row = document.createElement('div');
+        row.className = 'log-line';
+        row.innerHTML = `<span>${msg}</span><span style="color:var(--cyan);font-weight:700;">${status}</span>`;
+        logContainer.appendChild(row);
+        logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    dropZone.addEventListener('click', (e) => {
+        if (uiStates.idle.classList.contains('active')) fileInput.click();
+    });
+
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--cyan)';
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.style.borderColor = 'var(--border)';
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--border)';
+        if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length) handleFile(e.target.files[0]);
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        fileInput.value = '';
+        processedBlob = null;
+        switchState('idle');
+    });
+
+    document.getElementById('downloadBtn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!processedBlob) return;
+        const url = URL.createObjectURL(processedBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${originalName}_clean.${fileTypeExt}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    });
+
+    // Calibrated NotebookLM ratios (with portrait vs landscape awareness)
+    function patchNotebookLMCanvas(ctx, w, h) {
+        const isPortrait = h > w;
+        const widthRatio = isPortrait ? 0.28 : 0.0825;
+        const heightRatio = isPortrait ? 0.033 : 0.0375;
+        const marginRightRatio = isPortrait ? 0.018 : 0.0025;
+        const marginBottomRatio = isPortrait ? 0.012 : 0.0027;
+        const featherSize = 12;
+
+        const wmW = Math.round(w * widthRatio);
+        const wmH = Math.round(h * heightRatio);
+        const mr = Math.round(w * marginRightRatio);
+        const mb = Math.round(h * marginBottomRatio);
+
+        const x = Math.max(0, w - wmW - mr);
+        const y = Math.max(0, h - wmH - mb);
+        const srcY = Math.max(0, y - wmH);
+
+        if (srcY < 0 || x < 0) return;
+
+        const src = ctx.getImageData(x, srcY, wmW, wmH);
+        const dst = ctx.getImageData(x, y, wmW, wmH);
+        const res = ctx.createImageData(wmW, wmH);
+
+        for (let i = 0; i < wmH; i++) {
+            for (let j = 0; j < wmW; j++) {
+                const idx = (i * wmW + j) * 4;
+                let a = 1.0;
+                if (i < featherSize) a = Math.min(a, i / featherSize);
+                if (j < featherSize) a = Math.min(a, j / featherSize);
+
+                for (let c = 0; c < 4; c++) {
+                    res.data[idx + c] = Math.round(dst.data[idx + c] * (1 - a) + src.data[idx + c] * a);
+                }
+            }
+        }
+        ctx.putImageData(res, x, y);
+    }
+
+    async function handleFile(file) {
+        originalName = file.name.replace(/\.[^/.]+$/, '');
+        logContainer.innerHTML = '';
+        switchState('processing');
+
+        try {
+            appendLog('Initializing Presentation Cleaner Pipeline');
+            if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+                fileTypeExt = 'pdf';
+                await processPDF(file);
+            } else if (file.type.startsWith('image/') || /\.(png|jpg|jpeg|webp)$/i.test(file.name)) {
+                fileTypeExt = 'png';
+                await processImage(file);
+            } else {
+                throw new Error('Unsupported format. Please upload PDF, PNG, JPG, or WEBP.');
+            }
+        } catch (err) {
+            alert(err.message);
+            switchState('idle');
+        }
+    }
+
+    async function processPDF(file) {
+        appendLog('Parsing PDF presentation structure');
+        const arrayBuf = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument(arrayBuf).promise;
+        const total = pdf.numPages;
+        appendLog(`Deck loaded: ${total} slide page(s)`);
+
+        const { jsPDF } = window.jspdf;
+        let doc = null;
+
+        for (let i = 1; i <= total; i++) {
+            appendLog(`Processing slide ${i} of ${total}`);
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 2.0 });
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+
+            await page.render({ canvasContext: ctx, viewport }).promise;
+            patchNotebookLMCanvas(ctx, canvas.width, canvas.height);
+
+            const imgData = canvas.toDataURL('image/jpeg', 0.95);
+            const isLandscape = viewport.width > viewport.height;
+
+            if (i === 1) {
+                doc = new jsPDF({
+                    orientation: isLandscape ? 'l' : 'p',
+                    unit: 'px',
+                    format: [viewport.width, viewport.height]
+                });
+            } else {
+                doc.addPage([viewport.width, viewport.height], isLandscape ? 'l' : 'p');
+            }
+            doc.addImage(imgData, 'JPEG', 0, 0, viewport.width, viewport.height);
+        }
+
+        appendLog('Compiling sanitized presentation deck', 'DONE');
+        processedBlob = doc.output('blob');
+        showSuccess(processedBlob.size, 'PDF');
+    }
+
+    async function processImage(file) {
+        appendLog('Decoding slide image data');
+        const img = await new Promise((resolve, reject) => {
+            const el = new Image();
+            el.onload = () => resolve(el);
+            el.onerror = reject;
+            el.src = URL.createObjectURL(file);
+        });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+
+        appendLog(`Targeting watermark corner: ${img.width}x${img.height}`);
+        patchNotebookLMCanvas(ctx, canvas.width, canvas.height);
+
+        processedBlob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+        appendLog('Rendered cleaned slide image', 'DONE');
+        showSuccess(processedBlob.size, 'PNG');
+    }
+
+    function showSuccess(bytes, type) {
+        setTimeout(() => {
+            document.getElementById('resType').innerText = type;
+            document.getElementById('resName').innerText = `${originalName}_clean.${type.toLowerCase()}`;
+            document.getElementById('resMeta').innerText = `${(bytes / 1024 / 1024).toFixed(2)} MB · Cleanroom Sanitized`;
+            switchState('success');
+        }, 500);
+    }
+</script>
+
+</body>
+</html>
+
