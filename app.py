@@ -1143,18 +1143,8 @@ def render_notebooklm_workspace(nlm_engine_choice: Optional[str] = None, *args, 
             unsafe_allow_html=True,
         )
 
-        sample_portrait_path = Path("/Users/kalash/Desktop/watermark0remover/How_to_Scale_PSI_for_Data_Drift.mp4")
-        sample_landscape_path = Path("/Users/kalash/Desktop/watermark0remover/PR-Agent__Open-Source_Review.mp4")
-
-        col_samp1, col_samp2 = st.columns(2)
-        with col_samp1:
-            if sample_portrait_path.exists():
-                if st.button("📱 Load Portrait 9:16 Video (How to Scale PSI)", key="btn_load_port_sample"):
-                    st.session_state["nlm_active_video"] = str(sample_portrait_path)
-        with col_samp2:
-            if sample_landscape_path.exists():
-                if st.button("🖥️ Load Landscape 16:9 Video (PR-Agent Review)", key="btn_load_land_sample"):
-                    st.session_state["nlm_active_video"] = str(sample_landscape_path)
+        # Clear any legacy cached sample session state
+        st.session_state.pop("nlm_active_video", None)
 
         uploaded_video = st.file_uploader(
             "Upload NotebookLM or Gemini Notebook Video",
@@ -1169,8 +1159,6 @@ def render_notebooklm_workspace(nlm_engine_choice: Optional[str] = None, *args, 
             t_file.write(uploaded_video.read())
             t_file.close()
             target_video_path = t_file.name
-        elif "nlm_active_video" in st.session_state and Path(st.session_state["nlm_active_video"]).exists():
-            target_video_path = st.session_state["nlm_active_video"]
 
         if target_video_path:
             cap = cv2.VideoCapture(target_video_path)
@@ -1293,6 +1281,8 @@ def render_notebooklm_workspace(nlm_engine_choice: Optional[str] = None, *args, 
                     mime="video/mp4",
                     key="nlm_download_vid_btn",
                 )
+        else:
+            st.info("👆 Upload an MP4 or MOV video above to preview watermark detection and clean it with lossless audio.")
 
     with tab_pdf:
         st.markdown(
