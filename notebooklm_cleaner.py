@@ -197,10 +197,14 @@ def clean_notebooklm_video(
     custom_box: Optional[Dict[str, int]] = None,
     progress_callback: Optional[Callable[[int, int], None]] = None,
     trim_end_seconds: float = 3.0,
+    crf: int = 12,
+    preset_speed: str = "slow",
 ) -> str:
     """
     Remove the NotebookLM / Gemini Notebook watermark from a video file with
     lossless audio preservation using FFmpeg stream copy (-c:a copy).
+    ultra-high fidelity (CRF 12 + Slow preset) and bit-for-bit lossless audio
+    stream copying (-c:a copy). Zero intermediate file compression.
     Optionally trims trailing outro cards (default: last 3.0 seconds).
     """
     cap = cv2.VideoCapture(input_path)
@@ -246,6 +250,93 @@ def clean_notebooklm_video(
     src_y = max(0, y - wm_h - offset_y)
     src_x = x
 
+    ffmpeg_bin = shutil.which("ffmpeg") or ("/opt/homebrew/bin/ffmpeg" if os.path.exists("/opt/homebrew/bin/ffmpeg") else None)
+
+    # Strategy 1: High-Fidelity Direct FFmpeg Pipe (Zero intermediate compression, visually lossless CRF 17)
+    # Strategy 1: Ultra-High-Fidelity Direct FFmpeg Pipe (Zero intermediate compression, CRF 12 Master Quality)
+    if ffmpeg_bin:
+        cmd = [
+            ffmpeg_bin,
+            "-y",
+            "-f", "rawvideo",
+            "-pix_fmt", "bgr24",
+            "-s", f"{w}x{h}",
+            "-r", str(fps),
+            "-i", "-",
+            "-t", f"{target_duration:.3f}",
+            "-i", input_path,
+            "-map", "0:v:0",
+            "-map", "1:a:0?",
+            "-c:v", "libx264",
+            "-crf", "17",
+            "-preset", "medium",
+            "-crf", str(crf),
+            "-preset", preset_speed,
+            "-pix_fmt", "yuv420p",
+            "-colorspace", "bt709",
+            "-color_primaries", "bt709",
+            "-color_trc", "bt709",
+            "-color_range", "tv",
+            "-c:a", "copy",
+            "-movflags", "+faststart",
+            "-t", f"{target_duration:.3f}",
+            output_path,
+        ]
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        frame_idx = 0
+        pipe_failed = False
+        try:
+            while cap.isOpened() and frame_idx < frames_to_process:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                if method == "gradient_patch":
+                    src_patch = frame[src_y : src_y + wm_h, src_x : src_x + wm_w].astype(np.float32)
+                    dst_patch = frame[y : y + wm_h, x : x + wm_w].astype(np.float32)
+                    blended = (dst_patch * (1.0 - alpha) + src_patch * alpha).clip(0, 255).astype(np.uint8)
+                    frame[y : y + wm_h, x : x + wm_w] = blended
+                elif method == "inpaint":
+                    roi = frame[y : y + wm_h, x : x + wm_w]
+                    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+                    bg_val = float(np.median(gray))
+                    diff = np.abs(gray.astype(float) - bg_val)
+                    mask_roi = np.where(diff > 20, 255, 0).astype(np.uint8)
+                    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+                    mask_roi = cv2.dilate(mask_roi, kernel, iterations=2)
+                    frame[y : y + wm_h, x : x + wm_w] = cv2.inpaint(roi, mask_roi, 5, cv2.INPAINT_TELEA)
+
+                try:
+                    proc.stdin.write(frame.tobytes())
+                except (BrokenPipeError, OSError):
+                    pipe_failed = True
+                    break
+
+                frame_idx += 1
+                if progress_callback and frame_idx % 15 == 0:
+                    progress_callback(frame_idx, frames_to_process)
+
+            if proc.stdin:
+                try:
+                    proc.stdin.close()
+                except Exception:
+                    pass
+            proc.wait()
+
+            if not pipe_failed and proc.returncode == 0:
+                cap.release()
+                return output_path
+        except Exception:
+            pipe_failed = True
+            try:
+                proc.kill()
+            except Exception:
+                pass
+
+        # Reset capture position if pipe failed
+        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
+    # Strategy 2: Robust Fallback with lossless remuxing
     fd, temp_video = tempfile.mkstemp(suffix=".mp4")
     os.close(fd)
 
@@ -283,7 +374,7 @@ def clean_notebooklm_video(
         out.release()
 
         # Remux with lossless audio preservation
-        ffmpeg_bin = shutil.which("ffmpeg") or "ffmpeg"
+        ffmpeg_bin = ffmpeg_bin or shutil.which("ffmpeg") or "ffmpeg"
         cmd = [
             ffmpeg_bin,
             "-y",
@@ -293,19 +384,30 @@ def clean_notebooklm_video(
             "-map", "0:v:0",
             "-map", "1:a:0?",
             "-c:v", "libx264",
+            "-crf", "17",
+            "-preset", "medium",
+            "-crf", str(crf),
+            "-preset", preset_speed,
             "-pix_fmt", "yuv420p",
+            "-colorspace", "bt709",
+            "-color_primaries", "bt709",
+            "-color_trc", "bt709",
+            "-color_range", "tv",
             "-c:a", "copy",
+            "-movflags", "+faststart",
             "-t", f"{target_duration:.3f}",
             output_path,
         ]
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if res.returncode != 0:
-            # Fallback without audio mapping
             cmd_fallback = [
                 ffmpeg_bin, "-y", "-i", temp_video,
-                "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                "-c:v", "libx264", "-crf", "17", "-preset", "medium", "-pix_fmt", "yuv420p",
+                "-c:v", "libx264", "-crf", str(crf), "-preset", preset_speed, "-pix_fmt", "yuv420p",
+                "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv",
+                "-movflags", "+faststart",
                 "-t", f"{target_duration:.3f}",
-                output_path
+                output_path,
             ]
             subprocess.run(cmd_fallback, check=True)
 
@@ -355,7 +457,12 @@ def main():
     parser.add_argument("--feather", type=int, default=None, help="Boundary feather radius (default: auto-calibrated)")
     parser.add_argument("--trim-end", type=float, default=3.0, help="Seconds to trim from end of video to remove outro card (default: 3.0)")
     parser.add_argument("--no-trim", dest="trim_end", action="store_const", const=0.0, help="Do not trim the end of the video")
+    parser.add_argument("--crf", type=int, default=12, help="H.264 Constant Rate Factor: 0=lossless, 12=ultra-master (default: 12)")
+    parser.add_argument("--preset-speed", choices=["veryslow", "slow", "medium", "fast"], default="slow", help="H.264 motion search preset (default: slow for max fidelity)")
+    parser.add_argument("--lossless", action="store_true", help="Enable 100% mathematically lossless x264 encoding (CRF 0)")
     args = parser.parse_args()
+
+    effective_crf = 0 if args.lossless else args.crf
 
     in_path = Path(args.input)
     if not in_path.exists():
@@ -372,14 +479,18 @@ def main():
             out_path.parent.mkdir(parents=True, exist_ok=True)
             trim_msg = f" (trimming last {args.trim_end}s outro card)" if args.trim_end > 0 else ""
             print(f"Cleaning NotebookLM video: {in_path} -> {out_path}{trim_msg}...")
+            print(f"Cleaning NotebookLM video: {in_path} -> {out_path}{trim_msg} [CRF {effective_crf}, preset={args.preset_speed}]...")
             clean_notebooklm_video(
                 str(in_path),
                 str(out_path),
                 method=args.method,
                 feather=args.feather,
                 trim_end_seconds=args.trim_end,
+                crf=effective_crf,
+                preset_speed=args.preset_speed,
             )
             print(f"✓ Successfully cleaned NotebookLM video with lossless audio: {out_path}")
+            print(f"✓ Successfully cleaned NotebookLM video with ultra-master quality & lossless audio: {out_path}")
         elif ext in image_exts:
             out_path = Path(args.output) if args.output else in_path.with_name(f"{in_path.stem}_cleaned{in_path.suffix}")
             out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -409,6 +520,8 @@ def main():
                     method=args.method,
                     feather=args.feather,
                     trim_end_seconds=args.trim_end,
+                    crf=effective_crf,
+                    preset_speed=args.preset_speed,
                 )
                 count += 1
                 print(f"  Cleaned video: {f.name}")

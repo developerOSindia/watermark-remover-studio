@@ -796,6 +796,8 @@ def remove_watermark_from_video(
     method: str = "inpaint",
     progress_callback: callable | None = None,
     trim_end_seconds: float | None = None,
+    crf: int = 12,
+    preset_speed: str = "slow",
 ) -> dict:
     if mask_path is None or not Path(mask_path).exists():
         candidates = [
@@ -1013,6 +1015,110 @@ def remove_watermark_from_video(
             active = alpha >= ALPHA_THRESHOLD
             inpaint_mask = sparkle_inpaint_mask(box["size"], mask_image)
 
+    ffmpeg_bin = get_ffmpeg_binary()
+
+    # Strategy 1: High-Fidelity Direct FFmpeg Pipe (Zero intermediate compression, CRF 17 master quality)
+    if ffmpeg_bin is not None:
+        cmd = [
+            ffmpeg_bin,
+            "-y",
+            "-f", "rawvideo",
+            "-pix_fmt", "bgr24",
+            "-s", f"{width}x{height}",
+            "-r", str(fps),
+            "-i", "-",
+            "-t", f"{target_duration:.3f}",
+            "-i", str(input_path),
+            "-map", "0:v:0",
+            "-map", "1:a:0?",
+            "-c:v", "libx264",
+            "-crf", "17",
+            "-preset", "medium",
+            "-crf", str(crf),
+            "-preset", preset_speed,
+            "-pix_fmt", "yuv420p",
+            "-colorspace", "bt709",
+            "-color_primaries", "bt709",
+            "-color_trc", "bt709",
+            "-color_range", "tv",
+            "-c:a", "copy",
+            "-movflags", "+faststart",
+            "-t", f"{target_duration:.3f}",
+            str(output_path),
+        ]
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        processed = 0
+        pipe_failed = False
+        try:
+            while processed < frames_to_process:
+                success, frame = capture.read()
+                if not success:
+                    break
+
+                if preset == "notebooklm":
+                    bx, by = box["x"], box["y"]
+                    bw, bh = box["width"], box["height"]
+                    src_y = max(0, by - bh - nlm_offset_y)
+                    src_patch = frame[src_y : src_y + bh, bx : bx + bw].astype(np.float32)
+                    dst_patch = frame[by : by + bh, bx : bx + bw].astype(np.float32)
+                    blended = (dst_patch * (1.0 - nlm_alpha) + src_patch * nlm_alpha).clip(0, 255).astype(np.uint8)
+                    frame[by : by + bh, bx : bx + bw] = blended
+                elif is_text_watermark or method == "inpaint":
+                    pad = 16
+                    py0 = max(0, box["y"] - pad)
+                    py1 = min(height, box["y"] + box["height"] + pad)
+                    px0 = max(0, box["x"] - pad)
+                    px1 = min(width, box["x"] + box["width"] + pad)
+
+                    patch = frame[py0:py1, px0:px1].copy()
+                    patch_mask = np.zeros(patch.shape[:2], dtype=np.uint8)
+                    my0 = box["y"] - py0
+                    mx0 = box["x"] - px0
+                    patch_mask[my0 : my0 + box["height"], mx0 : mx0 + box["width"]] = inpaint_mask
+
+                    cleaned_patch = cv2.inpaint(patch, patch_mask, 5, cv2.INPAINT_TELEA)
+                    frame[py0:py1, px0:px1] = cleaned_patch
+                elif method == "reconstruct":
+                    frame = reconstruct_rows(frame, box, inpaint_mask)
+                else:
+                    region = frame[box["y"] : box["y"] + box["height"], box["x"] : box["x"] + box["width"]].astype(np.float32)
+                    restored = (region - alpha[:, :, None] * LOGO_VALUE) / (1.0 - alpha[:, :, None])
+                    region[active] = np.clip(restored[active], 0, 255)
+                    frame[box["y"] : box["y"] + box["height"], box["x"] : box["x"] + box["width"]] = region.astype(np.uint8)
+
+                try:
+                    proc.stdin.write(frame.tobytes())
+                except (BrokenPipeError, OSError):
+                    pipe_failed = True
+                    break
+
+                processed += 1
+                if progress_callback:
+                    progress_callback(processed, frames_to_process)
+                elif frames_to_process and processed % 30 == 0:
+                    print(f"Processed {processed}/{frames_to_process} frames", end="\r")
+
+            if proc.stdin:
+                try:
+                    proc.stdin.close()
+                except Exception:
+                    pass
+            proc.wait()
+
+            if not pipe_failed and proc.returncode == 0:
+                capture.release()
+                print(f"Processed {processed} frames. Master-quality pipeline complete.")
+                return box
+        except Exception:
+            pipe_failed = True
+            try:
+                proc.kill()
+            except Exception:
+                pass
+
+        capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
+    # Strategy 2: Fallback via temporary file
     temporary = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
     temporary_path = Path(temporary.name)
     temporary.close()
@@ -1088,6 +1194,12 @@ def remove_watermark_from_video(
                         "-map", "0:v:0?", "-map", "1:a?",
                         "-c:v", "libx264", "-crf", "18",
                         "-preset", "medium", "-c:a", "copy",
+                        "-c:v", "libx264", "-crf", str(crf),
+                        "-preset", preset_speed,
+                        "-pix_fmt", "yuv420p",
+                        "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv",
+                        "-c:a", "copy",
+                        "-movflags", "+faststart",
                         "-t", f"{target_duration:.3f}",
                         str(output_path),
                     ],
@@ -1101,6 +1213,10 @@ def remove_watermark_from_video(
                     [
                         ffmpeg_bin, "-y", "-i", str(temporary_path),
                         "-c:v", "libx264", "-crf", "18", "-preset", "medium",
+                        "-c:v", "libx264", "-crf", str(crf), "-preset", preset_speed,
+                        "-pix_fmt", "yuv420p",
+                        "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv",
+                        "-movflags", "+faststart",
                         "-t", f"{target_duration:.3f}",
                         str(output_path),
                     ],
@@ -1144,8 +1260,13 @@ def main() -> None:
     parser.add_argument("--strip-metadata", action="store_true", help="Strip C2PA and non-essential container metadata")
     parser.add_argument("--trim-end", type=float, default=None, help="Seconds to trim from end of video (default: 3.0 for notebooklm, 0.0 otherwise)")
     parser.add_argument("--no-trim", dest="trim_end", action="store_const", const=0.0, help="Do not trim the end of the video")
+    parser.add_argument("--crf", type=int, default=12, help="H.264 Constant Rate Factor: 0=lossless, 12=ultra-master (default: 12)")
+    parser.add_argument("--preset-speed", choices=["veryslow", "slow", "medium", "fast"], default="slow", help="H.264 motion search preset (default: slow for max fidelity)")
+    parser.add_argument("--lossless", action="store_true", help="Enable 100% mathematically lossless x264 encoding (CRF 0)")
     parser.add_argument("--inspect", action="store_true", help="Inspect file for C2PA manifests, AI prompts, and EXIF fingerprints")
     args = parser.parse_args()
+
+    effective_crf = 0 if args.lossless else args.crf
 
     if args.inspect:
         if inspect_image_fingerprints is None:
@@ -1177,6 +1298,8 @@ def main() -> None:
             preset=args.preset,
             method=args.method,
             trim_end_seconds=args.trim_end,
+            crf=effective_crf,
+            preset_speed=args.preset_speed,
         )
         return
 

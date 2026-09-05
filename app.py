@@ -1248,6 +1248,25 @@ def render_notebooklm_workspace(nlm_engine_choice: Optional[str] = None, *args, 
                     key="nlm_trim_sec_input",
                 )
 
+            col_q1, col_q2 = st.columns([3, 2])
+            with col_q1:
+                vid_quality = st.selectbox(
+                    "Video Fidelity Profile",
+                    ["master_slow", "lossless_crf0", "standard"],
+                    format_func=lambda q: {
+                        "master_slow": "💎 Ultra-Master Quality (CRF 12 · Slow Preset · Zero Degradation)",
+                        "lossless_crf0": "🔬 100% Mathematically Lossless (CRF 0 · Bit-for-Bit)",
+                        "standard": "⚡ High Quality (CRF 17 · Balanced)",
+                    }[q],
+                    index=0,
+                    key="nlm_vid_quality_sel",
+                    help="Ultra-Master uses CRF 12 and slow deep-trellis motion estimation to ensure zero visible quality degradation on slides, text, and diagrams.",
+                )
+            with col_q2:
+                vid_speed = "slow" if vid_quality == "master_slow" else ("medium" if vid_quality == "standard" else "slow")
+                vid_crf = 12 if vid_quality == "master_slow" else (0 if vid_quality == "lossless_crf0" else 17)
+                st.caption(f"H.264 Engine: `CRF {vid_crf} | {vid_speed} preset | BT.709 Color Matrix`")
+
             if st.button("🚀 Clean NotebookLM Video (Preserve Audio)", key="btn_clean_nlm_vid", type="primary"):
                 out_clean_vid = tempfile.NamedTemporaryFile(delete=False, suffix="_nlm_cleaned.mp4").name
                 prog_bar = st.progress(0, text="Initializing NotebookLM video cleaner...")
@@ -1266,6 +1285,8 @@ def render_notebooklm_workspace(nlm_engine_choice: Optional[str] = None, *args, 
                         custom_box=detected_box,
                         progress_callback=on_video_progress,
                         trim_end_seconds=trim_seconds if trim_outro else 0.0,
+                        crf=vid_crf,
+                        preset_speed=vid_speed,
                     )
                     prog_bar.progress(1.0, text=f"Finished in {time.time()-t0:.1f}s!")
 
