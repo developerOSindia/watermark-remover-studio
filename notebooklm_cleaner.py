@@ -189,6 +189,21 @@ def remove_notebooklm_watermark(
     return image
 
 
+def get_ffmpeg_binary() -> Optional[str]:
+    """Resolve FFmpeg binary from system PATH, Homebrew, or bundled imageio-ffmpeg."""
+    exe = shutil.which("ffmpeg")
+    if exe:
+        return exe
+    if os.path.exists("/opt/homebrew/bin/ffmpeg"):
+        return "/opt/homebrew/bin/ffmpeg"
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        pass
+    return None
+
+
 def clean_notebooklm_video(
     input_path: str,
     output_path: str,
@@ -250,6 +265,7 @@ def clean_notebooklm_video(
     src_x = x
 
     ffmpeg_bin = shutil.which("ffmpeg") or ("/opt/homebrew/bin/ffmpeg" if os.path.exists("/opt/homebrew/bin/ffmpeg") else None)
+    ffmpeg_bin = get_ffmpeg_binary()
 
     # Strategy 1: Ultra-High-Fidelity Direct FFmpeg Pipe (Zero intermediate compression, CRF 12 Master Quality)
     if ffmpeg_bin:
